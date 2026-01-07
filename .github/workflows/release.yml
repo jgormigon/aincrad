@@ -64,48 +64,47 @@ jobs:
           echo "version=$version" >> $env:GITHUB_OUTPUT
           Write-Host "Version: $version"
           
-    - name: Create release archive
-      shell: pwsh
-      run: |
-        $version = "${{ steps.get_version.outputs.version }}${{ steps.get_version_commit.outputs.version }}"
-        if (-not $version) { $version = "latest" }
-
-        New-Item -ItemType Directory -Force -Path "release" | Out-Null
-        Copy-Item "dist\MapleAutocuber.exe" -Destination "release\MapleAutocuber.exe"
-
-        if (Test-Path "dist\tesseract") {
-          Copy-Item "dist\tesseract" -Destination "release\tesseract" -Recurse
-        }
-
-        $lines = @(
-          "# Maple Autocuber Release",
-          "",
-          "Version: $version",
-          "Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
-          "",
-          "## Installation",
-          "",
-          "1. Extract all files to a folder",
-          "2. Run MapleAutocuber.exe",
-          "3. No additional installation required - Tesseract OCR is bundled!",
-          "",
-          "## Notes",
-          "",
-          "- The executable includes all dependencies",
-          "- Tesseract OCR is bundled and will be used automatically",
-          "- Run as Administrator if you encounter permission issues",
-          "",
-          "## Files",
-          "",
-          "- MapleAutocuber.exe - Main executable",
-          "- tesseract/ - Bundled Tesseract OCR (already included in .exe, this is for reference)"
-        )
-
-        $lines -join "`r`n" | Out-File -FilePath "release\README.txt" -Encoding UTF8
-
-        Compress-Archive -Path "release\*" -DestinationPath "MapleAutocuber-$version.zip" -Force
-
-        $readmeContent | Out-File -FilePath "release\README.txt" -Encoding UTF8
+      - name: Create release archive
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}${{ steps.get_version_commit.outputs.version }}"
+          if (-not $version) { $version = "latest" }
+          
+          # Create a release folder
+          New-Item -ItemType Directory -Force -Path "release" | Out-Null
+          
+          # Copy executable
+          Copy-Item "dist\MapleAutocuber.exe" -Destination "release\MapleAutocuber.exe"
+          
+          # Copy tesseract folder (should already be bundled, but include separately for reference)
+          if (Test-Path "dist\tesseract") {
+            Copy-Item "dist\tesseract" -Destination "release\tesseract" -Recurse
+          }
+          
+          # Create README for release
+          $readmeLines = @(
+            "# Maple Autocuber Release",
+            "",
+            "Version: $version",
+            "Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+            "",
+            "## Installation",
+            "",
+            "1. Extract all files to a folder",
+            "2. Run `MapleAutocuber.exe`",
+            "3. No additional installation required - Tesseract OCR is bundled!",
+            "",
+            "## Notes",
+            "",
+            "- The executable includes all dependencies",
+            "- Tesseract OCR is bundled and will be used automatically",
+            "- Run as Administrator if you encounter permission issues",
+            "",
+            "## Files",
+            "",
+            "- `MapleAutocuber.exe` - Main executable",
+            "- `tesseract/` - Bundled Tesseract OCR (already included in .exe, this is for reference)"
+          )
+          $readmeLines -join "`r`n" | Out-File -FilePath "release\README.txt" -Encoding UTF8
         
         # Create zip archive
         Compress-Archive -Path "release\*" -DestinationPath "MapleAutocuber-$version.zip" -Force
