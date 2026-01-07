@@ -664,28 +664,8 @@ class potential:
                 self._send_ocr_result("Bot stopped by user")
                 break
             
-            # Press spacebar to reset (replaces clicking Reset button)
-            press_reset_spacebar()
-            
-            # Check immediately after click (before any sleep)
-            if bot_stop_event.is_set():
-                self._send_ocr_result("Bot stopped by user")
-                break
-            
-            # Wait for potential window to update after click
-            # Use shorter sleep intervals for more responsive stopping
-            # Reduced from 1s to 0.5s - enough time for window to update
-            for _ in range(5):  # Break 0.5 seconds into 5 checks of 0.1 seconds
-                if bot_stop_event.is_set():
-                    print("Bot stopped by user")
-                    break
-                time.sleep(0.1)
-            
-            # Final check before processing lines
-            if bot_stop_event.is_set():
-                self._send_ocr_result("Bot stopped by user")
-                break
-            
+            # FIRST: Get and check the CURRENT potential before resetting
+            # This ensures we don't skip a good potential by resetting too early
             self.get_lines()
             
             # Check if cubes are used up (same stats 3 times in a row)
@@ -743,31 +723,42 @@ class potential:
                 elif check_type == "1L_stat":
                     self.check_roll_1L_stat(stat, min_value=min_value)
             
-            # Check stop event before continuing
+            # Check if we should stop (potential passed)
+            if self.stop_bot:
+                # Potential passed - stop immediately without resetting
+                return
+            
+            # Potential did NOT pass - format output and reset for next iteration
+            lines_str = f"{self.line1}, {self.line2}"
+            if self.line3 and self.line3 != "Trash":
+                lines_str += f", {self.line3}"
+            total_stats = self.get_total_stats_string()
+            result_text = f"{lines_str}    REJECT (Stats: {total_stats})"
+            self._send_ocr_result(result_text)
+            
+            # Check stop event before resetting
             if bot_stop_event.is_set():
                 self._send_ocr_result("Bot stopped by user")
                 break
             
-            if self.stop_bot == False:
-                # Format output with 3 lines and total stats
-                lines_str = f"{self.line1}, {self.line2}"
-                if self.line3 and self.line3 != "Trash":
-                    lines_str += f", {self.line3}"
-                total_stats = self.get_total_stats_string()
-                result_text = f"{lines_str}    REJECT (Stats: {total_stats})"
-                self._send_ocr_result(result_text)
-                
-                # Check stop event before sleeping
+            # NOW reset to get a new potential for the next iteration
+            press_reset_spacebar()
+            
+            # Check immediately after reset
+            if bot_stop_event.is_set():
+                self._send_ocr_result("Bot stopped by user")
+                break
+            
+            # Wait for potential window to update after reset
+            # Use shorter sleep intervals for more responsive stopping
+            for _ in range(5):  # Break 0.5 seconds into 5 checks of 0.1 seconds
                 if bot_stop_event.is_set():
-                    self._send_ocr_result("Bot stopped by user")
+                    print("Bot stopped by user")
                     break
-                
-                # Reduced delay - no need to wait 1s after reject
-                time.sleep(0.2)  # Small delay before next iteration
-            else:
-                # Small delay before returning after successful match
-                time.sleep(0.2)
-                return
+                time.sleep(0.1)
+            
+            # Small delay before next iteration
+            time.sleep(0.2)
 
 
 
