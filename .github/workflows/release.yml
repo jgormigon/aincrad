@@ -11,77 +11,77 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Checkout code
+        uses: actions/checkout@v4
         
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-        
-    - name: Verify Tesseract folder exists
-      run: |
-        if (-not (Test-Path "tesseract\tesseract.exe")) {
-          Write-Host "ERROR: Tesseract folder not found in tesseract/"
-          Write-Host "Please ensure tesseract/ contains the portable Tesseract installation"
-          Write-Host "The tesseract folder should be committed to the repository"
-          exit 1
-        }
-        Write-Host "Tesseract found: tesseract\tesseract.exe"
-        Write-Host "Tesseract will be bundled with the executable"
-        
-    - name: Build executable
-      run: |
-        pyinstaller build_exe.spec --clean
-        
-    - name: Verify executable
-      run: |
-        if (-not (Test-Path "dist\MapleAutocuber.exe")) {
-          Write-Host "ERROR: Executable not found!"
-          exit 1
-        }
-        Write-Host "Executable created successfully: dist\MapleAutocuber.exe"
-        
-    - name: Get version from tag
-      id: get_version
-      if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        $version = "${{ github.ref }}".Replace("refs/tags/v", "")
-        echo "version=$version" >> $env:GITHUB_OUTPUT
-        Write-Host "Version: $version"
-        
-    - name: Get version from commit
-      id: get_version_commit
-      if: github.event_name == 'workflow_dispatch'
-      run: |
-        $version = "dev-${{ github.sha }}"
-        echo "version=$version" >> $env:GITHUB_OUTPUT
-        Write-Host "Version: $version"
-        
-    - name: Create release archive
-      run: |
-        $version = "${{ steps.get_version.outputs.version }}${{ steps.get_version_commit.outputs.version }}"
-        if (-not $version) { $version = "latest" }
-        
-        # Create a release folder
-        New-Item -ItemType Directory -Force -Path "release" | Out-Null
-        
-        # Copy executable
-        Copy-Item "dist\MapleAutocuber.exe" -Destination "release\MapleAutocuber.exe"
-        
-        # Copy tesseract folder (should already be bundled, but include separately for reference)
-        if (Test-Path "dist\tesseract") {
-          Copy-Item "dist\tesseract" -Destination "release\tesseract" -Recurse
-        }
-        
-        # Create README for release
-        $readmeContent = @"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          
+      - name: Verify Tesseract folder exists
+        run: |
+          if (-not (Test-Path "tesseract\tesseract.exe")) {
+            Write-Host "ERROR: Tesseract folder not found in tesseract/"
+            Write-Host "Please ensure tesseract/ contains the portable Tesseract installation"
+            Write-Host "The tesseract folder should be committed to the repository"
+            exit 1
+          }
+          Write-Host "Tesseract found: tesseract\tesseract.exe"
+          Write-Host "Tesseract will be bundled with the executable"
+          
+      - name: Build executable
+        run: |
+          pyinstaller build_exe.spec --clean
+          
+      - name: Verify executable
+        run: |
+          if (-not (Test-Path "dist\MapleAutocuber.exe")) {
+            Write-Host "ERROR: Executable not found!"
+            exit 1
+          }
+          Write-Host "Executable created successfully: dist\MapleAutocuber.exe"
+          
+      - name: Get version from tag
+        id: get_version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          $version = "${{ github.ref }}".Replace("refs/tags/v", "")
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+          
+      - name: Get version from commit
+        id: get_version_commit
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          $version = "dev-${{ github.sha }}"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+          
+      - name: Create release archive
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}${{ steps.get_version_commit.outputs.version }}"
+          if (-not $version) { $version = "latest" }
+          
+          # Create a release folder
+          New-Item -ItemType Directory -Force -Path "release" | Out-Null
+          
+          # Copy executable
+          Copy-Item "dist\MapleAutocuber.exe" -Destination "release\MapleAutocuber.exe"
+          
+          # Copy tesseract folder (should already be bundled, but include separately for reference)
+          if (Test-Path "dist\tesseract") {
+            Copy-Item "dist\tesseract" -Destination "release\tesseract" -Recurse
+          }
+          
+          # Create README for release
+          $readmeContent = @"
 # Maple Autocuber Release
 
 Version: $version
