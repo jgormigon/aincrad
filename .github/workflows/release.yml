@@ -82,7 +82,6 @@ jobs:
           
           # Create README for release
           $readmeLines = @(
-            $readmeLines = @(
             "# Maple Autocuber Release",
             "",
             "Version: $version",
