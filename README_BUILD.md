@@ -54,7 +54,7 @@ The executable will be created in the `dist` folder:
 
 1. **Tesseract OCR**: The executable includes a bundled portable Tesseract OCR. Users don't need to install Tesseract separately - it's automatically detected and used.
 
-2. **Templates Folder**: The `templates` folder (containing `reset_button.png.jpg`) is automatically included in the build.
+2. **Templates Folder**: The `templates` folder (containing `reset_button.jpg`) is automatically included in the build.
 
 3. **Configuration**: The `crop_config.py` file is included in the build. Users can modify it if needed.
 

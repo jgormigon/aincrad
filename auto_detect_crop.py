@@ -14,7 +14,7 @@ def find_reset_button_template(image, template_path=None, debug=False):
     
     Args:
         image: OpenCV image (BGR format) - full window screenshot
-        template_path: Path to Reset button template image. If None, tries 'templates/reset_button.png'
+        template_path: Path to Reset button template image. If None, tries 'templates/reset_button'
         debug: If True, print debug info
     
     Returns:
@@ -23,7 +23,7 @@ def find_reset_button_template(image, template_path=None, debug=False):
     if template_path is None:
         # Try to find template in templates folder
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        template_path = os.path.join(script_dir, 'templates', 'reset_button.png')
+        template_path = os.path.join(script_dir, 'templates', 'reset_button')
     
     if not os.path.exists(template_path):
         if debug:
@@ -91,6 +91,131 @@ def find_reset_button_template(image, template_path=None, debug=False):
         if debug:
             print(f"[TEMPLATE-MATCH] Error in template matching: {e}")
         return None
+
+
+def is_reset_button_unavailable(image, template_path=None, debug=False):
+    """
+    Check if Reset button is in unavailable (grayed out) state.
+    
+    Uses template matching first, then falls back to brightness analysis if template not found.
+    
+    Args:
+        image: OpenCV image (BGR format) - full window screenshot
+        template_path: Path to Reset button unavailable template image. If None, tries 'templates/reset_button_unavailable'
+        debug: If True, print debug info
+    
+    Returns:
+        True if unavailable template is found (button is grayed out), False otherwise
+    """
+    if template_path is None:
+        # Try to find template in templates folder
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        template_path = os.path.join(script_dir, 'templates', 'reset_button_unavailable')
+    
+    template_exists = os.path.exists(template_path)
+    template_match_result = None
+    
+    # Try template matching first if template exists
+    if template_exists:
+        try:
+            # Load template
+            template = cv.imread(template_path, cv.IMREAD_COLOR)
+            if template is None:
+                if debug:
+                    print(f"[TEMPLATE-MATCH] Failed to load unavailable template from: {template_path}")
+                template_match_result = None
+            else:
+                # Convert both to grayscale for better matching
+                img_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+                template_gray = cv.cvtColor(template, cv.COLOR_BGR2GRAY)
+                
+                # Try multiple matching methods for better tolerance
+                # Lower threshold to 0.5 for better detection of grayed-out buttons
+                matching_methods = [
+                    (cv.TM_CCOEFF_NORMED, 0.5),  # Lower threshold for better grayed-out button detection
+                    (cv.TM_CCORR_NORMED, 0.5),   # Alternative method
+                    (cv.TM_SQDIFF_NORMED, 0.5),  # Another method (lower is better for SQDIFF)
+                ]
+                
+                best_confidence = 0.0
+                best_method = None
+                
+                for method, threshold in matching_methods:
+                    try:
+                        result = cv.matchTemplate(img_gray, template_gray, method)
+                        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
+                        
+                        # For TM_SQDIFF_NORMED, lower values are better (1 - value gives similarity)
+                        if method == cv.TM_SQDIFF_NORMED:
+                            similarity = 1 - min_val
+                            if similarity >= threshold and similarity > best_confidence:
+                                best_confidence = similarity
+                                best_method = method
+                        else:
+                            # For other methods, higher values are better
+                            if max_val >= threshold and max_val > best_confidence:
+                                best_confidence = max_val
+                                best_method = method
+                    except Exception as e:
+                        if debug:
+                            print(f"[TEMPLATE-MATCH] Error with method {method}: {e}")
+                        continue
+                
+                # If we found a match above threshold, button is unavailable
+                # Lower threshold to 0.5 for better detection
+                if best_confidence >= 0.5:
+                    if debug:
+                        print(f"[TEMPLATE-MATCH] Reset button is UNAVAILABLE (grayed out) - confidence: {best_confidence:.2f}, method: {best_method}")
+                    return True
+                else:
+                    template_match_result = False
+                    if debug:
+                        print(f"[TEMPLATE-MATCH] Template match confidence too low ({best_confidence:.2f}), falling back to brightness check")
+        except Exception as e:
+            if debug:
+                print(f"[TEMPLATE-MATCH] Error in template matching: {e}, falling back to brightness check")
+            template_match_result = None
+    else:
+        if debug:
+            print(f"[TEMPLATE-MATCH] Unavailable template not found at: {template_path}, using brightness check")
+        template_match_result = None
+    
+    # Fallback: Use brightness analysis if template matching failed, had low confidence, or template doesn't exist
+    # Grayed-out buttons are typically darker (lower brightness)
+    if template_match_result is None or template_match_result is False:
+        if debug:
+            print(f"[BRIGHTNESS-CHECK] Using brightness analysis to detect grayed-out button...")
+        
+        reset_pos = find_reset_button_template(image, debug=debug)
+        if reset_pos:
+            reset_x, reset_y, reset_w, reset_h = reset_pos
+            # Extract button region
+            button_region = image[reset_y:reset_y+reset_h, reset_x:reset_x+reset_w]
+            if button_region.size > 0:
+                # Convert to grayscale and calculate mean brightness
+                button_gray = cv.cvtColor(button_region, cv.COLOR_BGR2GRAY)
+                mean_brightness = np.mean(button_gray)
+                
+                # Grayed-out buttons typically have brightness < 120 (out of 255)
+                # Normal buttons are usually brighter (> 150)
+                # Use a threshold around 120-130 to distinguish
+                threshold = 125  # Adjust based on testing
+                is_grayed = mean_brightness < threshold
+                
+                if debug:
+                    print(f"[BRIGHTNESS-CHECK] Reset button brightness: {mean_brightness:.1f}, threshold: {threshold}, is_grayed: {is_grayed}")
+                
+                return is_grayed
+        # If we can't find button or analyze it, assume available (safer to continue)
+        if debug:
+            print(f"[BRIGHTNESS-CHECK] Could not find reset button for brightness analysis, assuming available")
+        return False
+    
+    # Template matching succeeded but didn't find grayed-out button
+    # (This should not be reached if brightness check was used, but included for safety)
+    if debug:
+        print(f"[TEMPLATE-MATCH] Reset button is AVAILABLE (not grayed out)")
+    return False
 
 
 def detect_potential_region(image, debug=False, cube_type="Glowing"):

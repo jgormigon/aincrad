@@ -10,7 +10,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('templates', 'templates'),  # Include templates folder (reset_button.png.jpg)
+        ('templates', 'templates'),  # Include templates folder (reset_button.jpg)
         ('crop_config.py', '.'),  # Include config file
         ('tesseract', 'tesseract'),  # Include bundled Tesseract OCR
     ],

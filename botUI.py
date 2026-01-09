@@ -3,6 +3,8 @@ from tkinter import ttk
 from tkinter import filedialog
 import threading
 import win32gui
+import hashlib
+import secrets
 import tesseract_config  # Configure Tesseract before importing bot_logic
 from bot_logic import run_bot, default_config, bot_stop_event
 
@@ -22,7 +24,10 @@ def get_all_windows():
 class BotGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Maple Autocuber Bot")
+        # Generate a random hash code for window title to avoid detection
+        random_bytes = secrets.token_bytes(16)
+        hash_code = hashlib.sha256(random_bytes).hexdigest()[:12].upper()
+        self.root.title(f"{hash_code}")
         self.root.geometry('600x750')
         
         # Configuration variables
@@ -33,8 +38,13 @@ class BotGUI:
         self.create_widgets()
         
     def create_widgets(self):
-        # Window Selection Section (before tabs)
-        self.create_window_selection()
+        # Container frame for Window Selection and Cube Type (same row)
+        top_frame = Frame(self.root)
+        top_frame.pack(fill=X, padx=10, pady=5)
+        
+        # Window Selection and Cube Type Section (before tabs)
+        self.create_window_selection(top_frame)
+        self.create_cube_type_selection(top_frame)
         
         # Create notebook for tabs
         notebook = ttk.Notebook(self.root)
@@ -50,18 +60,13 @@ class BotGUI:
         notebook.add(roll_frame, text="Roll Checks")
         self.create_roll_tab(roll_frame)
         
-        # Stat-Specific Checks Tab
-        stat_specific_frame = Frame(notebook)
-        notebook.add(stat_specific_frame, text="Stat-Specific")
-        self.create_stat_specific_tab(stat_specific_frame)
-        
         # Control Buttons
         self.create_control_buttons()
     
-    def create_window_selection(self):
+    def create_window_selection(self, parent):
         """Create window selection dropdown"""
-        window_frame = LabelFrame(self.root, text="Window Selection", padx=10, pady=10)
-        window_frame.pack(fill=X, padx=10, pady=5)
+        window_frame = LabelFrame(parent, text="Window Selection", padx=10, pady=10)
+        window_frame.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 5))
         
         Label(window_frame, text="Select Target Window:").pack(anchor=W, pady=(0, 5))
         
@@ -102,6 +107,21 @@ class BotGUI:
         # Show initial status
         if available_windows:
             self.window_status.config(text=f"Found {len(available_windows)} window(s)", fg="green")
+    
+    def create_cube_type_selection(self, parent):
+        """Create cube type selection section"""
+        cube_type_frame = LabelFrame(parent, text="Cube Type", padx=10, pady=10)
+        cube_type_frame.pack(side=LEFT, fill=BOTH, expand=True, padx=(5, 0))
+        
+        self.cube_type = StringVar(value=self.config.get("cube_type", "Glowing"))
+        cube_type_label = Label(cube_type_frame, text="Select Cube Type:")
+        cube_type_label.pack(anchor=W, pady=(0, 5))
+        
+        cube_type_glowing = Radiobutton(cube_type_frame, text="Glowing Cube", variable=self.cube_type, value="Glowing")
+        cube_type_glowing.pack(anchor=W)
+        
+        cube_type_bright = Radiobutton(cube_type_frame, text="Bright Cube", variable=self.cube_type, value="Bright")
+        cube_type_bright.pack(anchor=W)
         
     def refresh_windows(self):
         """Refresh the list of available windows"""
@@ -211,20 +231,6 @@ class BotGUI:
         # Create scrollable frame
         scrollable_frame = self.create_scrollable_frame(parent)
         
-        # Cube Type Selection
-        cube_type_frame = LabelFrame(scrollable_frame, text="Cube Type", padx=10, pady=10)
-        cube_type_frame.pack(fill=X, padx=10, pady=5)
-        
-        self.cube_type = StringVar(value="Glowing")
-        cube_type_label = Label(cube_type_frame, text="Select Cube Type:")
-        cube_type_label.pack(anchor=W, pady=(0, 5))
-        
-        cube_type_glowing = Radiobutton(cube_type_frame, text="Glowing Cube", variable=self.cube_type, value="Glowing")
-        cube_type_glowing.pack(anchor=W)
-        
-        cube_type_bright = Radiobutton(cube_type_frame, text="Bright Cube", variable=self.cube_type, value="Bright")
-        cube_type_bright.pack(anchor=W)
-        
         # OCR Results Display
         ocr_frame = LabelFrame(scrollable_frame, text="OCR Results", padx=10, pady=10)
         ocr_frame.pack(fill=BOTH, expand=True, padx=10, pady=5)
@@ -332,74 +338,6 @@ class BotGUI:
                           font=("Arial", 8), fg="gray", wraplength=500)
         info_label.pack(anchor=W, padx=5, pady=5)
         
-    def create_stat_specific_tab(self, parent):
-        # Create scrollable frame
-        scrollable_frame = self.create_scrollable_frame(parent)
-        
-        # Instructions
-        info_label = Label(scrollable_frame, text="Add stat-specific checks below. Format: Type, Stat, Min Value", 
-                          font=("Arial", 9))
-        info_label.pack(pady=5)
-        
-        # Listbox for stat checks
-        list_frame = Frame(scrollable_frame)
-        list_frame.pack(fill=BOTH, expand=True, padx=10, pady=5)
-        
-        scrollbar = Scrollbar(list_frame)
-        scrollbar.pack(side=RIGHT, fill=Y)
-        
-        self.stat_checks_listbox = Listbox(list_frame, yscrollcommand=scrollbar.set, height=8)
-        self.stat_checks_listbox.pack(side=LEFT, fill=BOTH, expand=True)
-        scrollbar.config(command=self.stat_checks_listbox.yview)
-        
-        # Add/Remove controls
-        add_frame = LabelFrame(scrollable_frame, text="Add Stat Check", padx=10, pady=10)
-        add_frame.pack(fill=X, padx=10, pady=5)
-        
-        # Type selection
-        type_label = Label(add_frame, text="Type:")
-        type_label.grid(row=0, column=0, sticky=W, pady=2)
-        self.stat_check_type = StringVar(value="2L_stat")
-        type_menu = OptionMenu(add_frame, self.stat_check_type, "2L_stat", "1L_stat")
-        type_menu.grid(row=0, column=1, sticky=W, padx=5)
-        
-        # Stat selection
-        stat_label = Label(add_frame, text="Stat:")
-        stat_label.grid(row=1, column=0, sticky=W, pady=2)
-        self.stat_check_stat = StringVar(value="STR")
-        stat_menu = OptionMenu(add_frame, self.stat_check_stat, "STR", "DEX", "INT", "LUK", "ALL")
-        stat_menu.grid(row=1, column=1, sticky=W, padx=5)
-        
-        # Min value
-        value_label = Label(add_frame, text="Min Value:")
-        value_label.grid(row=2, column=0, sticky=W, pady=2)
-        self.stat_check_value = IntVar(value=9)
-        value_entry = Entry(add_frame, textvariable=self.stat_check_value, width=10)
-        value_entry.grid(row=2, column=1, sticky=W, padx=5)
-        
-        # Buttons
-        button_frame = Frame(add_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=10)
-        
-        add_button = Button(button_frame, text="Add Check", command=self.add_stat_check)
-        add_button.pack(side=LEFT, padx=5)
-        
-        remove_button = Button(button_frame, text="Remove Selected", command=self.remove_stat_check)
-        remove_button.pack(side=LEFT, padx=5)
-        
-    def add_stat_check(self):
-        check_type = self.stat_check_type.get()
-        stat = self.stat_check_stat.get()
-        min_value = self.stat_check_value.get()
-        
-        display_text = f"{check_type} - {stat} (min: {min_value}%)"
-        self.stat_checks_listbox.insert(END, display_text)
-        
-    def remove_stat_check(self):
-        selection = self.stat_checks_listbox.curselection()
-        if selection:
-            self.stat_checks_listbox.delete(selection[0])
-            
     def create_control_buttons(self):
         button_frame = Frame(self.root)
         button_frame.pack(pady=10)
@@ -480,22 +418,6 @@ class BotGUI:
             "stat_types": flex_stat_types,
             "required_count": int(self.flex_required_count.get())
         }
-        
-        # Stat-specific checks
-        config["stat_checks"] = []
-        for i in range(self.stat_checks_listbox.size()):
-            item = self.stat_checks_listbox.get(i)
-            # Parse the display text to extract values
-            parts = item.split(" - ")
-            check_type = parts[0]
-            rest = parts[1].split(" (min: ")
-            stat = rest[0]
-            min_value = int(rest[1].replace("%)", ""))
-            config["stat_checks"].append({
-                "type": check_type,
-                "stat": stat,
-                "min_value": min_value
-            })
         
         return config
         

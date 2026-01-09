@@ -1,5 +1,6 @@
-from translate_ocr_results import process_lines, get_stat_from_line, extract_stat_value, get_potlines, matches_line_pattern
+from translate_ocr_results import process_lines, get_stat_from_line, get_all_stats_from_line, extract_stat_value, get_potlines, matches_line_pattern
 from macro_controls import time_to_start , click, press_reset_spacebar
+from auto_detect_crop import is_reset_button_unavailable
 import keyboard
 import time
 import threading
@@ -19,6 +20,8 @@ default_config = {
     "INTcheck": False,
     "LUKcheck": False,
     "ALLcheck": False,
+    "ATTcheck": False,
+    "MATTcheck": False,
     "statThreshold": 21,
     "stopAtStatThreshold": False,
     "flexible_roll_check": {
@@ -26,7 +29,6 @@ default_config = {
         "stat_types": [],  # List of stat types: ["BD", "ATT", "MATT", "IED", "CD", "IA", "MESO"]
         "required_count": 2  # Number of matching lines required (1, 2, or 3)
     },
-    "stat_checks": [],  # List of dicts: [{"type": "2L_stat", "stat": "STR", "min_value": 9}, ...]
     "ocr_callback": None  # Callback function to update OCR results in GUI
 }
 
@@ -79,8 +81,9 @@ class potential:
         
         for line in lines_to_process:
             if line and line != "Trash":
-                stat_type, stat_value = get_stat_from_line(line)
-                if stat_type:
+                # Extract all stats from the line (handles comma-separated stats)
+                line_stats = get_all_stats_from_line(line)
+                for stat_type, stat_value in line_stats:
                     if stat_type == "ALL":
                         stats["ALL"] += stat_value
                     elif stat_type == "ATT":
@@ -193,6 +196,10 @@ class potential:
             statcalc['LUK'] = stats['LUK']
         if config["ALLcheck"]:
             statcalc['ALL'] = stats['ALL']
+        if config["ATTcheck"]:
+            statcalc['ATT'] = stats['ATT']
+        if config["MATTcheck"]:
+            statcalc['MATT'] = stats['MATT']
         
         if not statcalc:
             return 0
@@ -217,48 +224,6 @@ class potential:
                 lines_str += f", {self.line3}"
             total_stats = self.get_total_stats_string()
             result_text = f"{lines_str}    PASS (Stats: {total_stats}, Highest: {highest_stat}, Threshold: {config['statThreshold']})"
-            self._send_ocr_result(result_text)
-            return True
-        return False
-    
-    def check_roll_2L_stat(self, stat_type, min_value_per_line=0):
-        """
-        Check if both lines contain the specified stat type with minimum values.
-        stat_type: "STR", "DEX", "INT", "LUK", or "ALL"
-        min_value_per_line: minimum value required per line (0 = any value)
-        """
-        stat1_type, stat1_value = get_stat_from_line(self.line1)
-        stat2_type, stat2_value = get_stat_from_line(self.line2)
-        
-        if stat1_type == stat_type and stat2_type == stat_type:
-            if min_value_per_line == 0 or (stat1_value >= min_value_per_line and stat2_value >= min_value_per_line):
-                self.stop_bot = True
-                lines_str = f"{self.line1}, {self.line2}"
-                if self.line3 and self.line3 != "Trash":
-                    lines_str += f", {self.line3}"
-                total_stats = self.get_total_stats_string()
-                result_text = f"{lines_str}    PASS (2L {stat_type}, Stats: {total_stats})"
-                self._send_ocr_result(result_text)
-                return True
-        return False
-    
-    def check_roll_1L_stat(self, stat_type, min_value=0):
-        """
-        Check if at least one line contains the specified stat type.
-        stat_type: "STR", "DEX", "INT", "LUK", or "ALL"
-        min_value: minimum value required (0 = any value)
-        """
-        stat1_type, stat1_value = get_stat_from_line(self.line1)
-        stat2_type, stat2_value = get_stat_from_line(self.line2)
-        
-        if (stat1_type == stat_type and (min_value == 0 or stat1_value >= min_value)) or \
-           (stat2_type == stat_type and (min_value == 0 or stat2_value >= min_value)):
-            self.stop_bot = True
-            lines_str = f"{self.line1}, {self.line2}"
-            if self.line3 and self.line3 != "Trash":
-                lines_str += f", {self.line3}"
-            total_stats = self.get_total_stats_string()
-            result_text = f"{lines_str}    PASS (1L {stat_type}, Stats: {total_stats})"
             self._send_ocr_result(result_text)
             return True
         return False
@@ -299,17 +264,35 @@ class potential:
             return
 
     def check_roll_2L_ATT_18(self):
-        if self.line1 in single_lines_dict['ATT'] and self.line2 in single_lines_dict['ATT']:
-            self.stop_bot = True
-            lines_str = f"{self.line1}, {self.line2}"
-            if self.line3 and self.line3 != "Trash":
-                lines_str += f", {self.line3}"
-            total_stats = self.get_total_stats_string()
-            result_text = f"{lines_str}    PASS (Stats: {total_stats})"
-            self._send_ocr_result(result_text)
-            return True
-        else:
-            return False
+        """
+        Check if there are 2 lines (or 2 instances) of ATT/Attack Power.
+        Handles comma-separated stats in a single line.
+        """
+        att_count = 0
+        lines_to_check = [self.line1, self.line2]
+        if self.line3 and self.line3 != "Trash":
+            lines_to_check.append(self.line3)
+        
+        # Check each line for ATT (handles comma-separated stats)
+        for line in lines_to_check:
+            if line and line != "Trash":
+                # Split by comma to handle multiple stats in one line
+                parts = [part.strip() for part in line.split(',')]
+                for part in parts:
+                    if self._has_attack_power(part):
+                        att_count += 1
+                        if att_count >= 2:
+                            # Found 2 ATT instances, stop bot
+                            self.stop_bot = True
+                            lines_str = f"{self.line1}, {self.line2}"
+                            if self.line3 and self.line3 != "Trash":
+                                lines_str += f", {self.line3}"
+                            total_stats = self.get_total_stats_string()
+                            result_text = f"{lines_str}    PASS (2L ATT, Stats: {total_stats})"
+                            self._send_ocr_result(result_text)
+                            return True
+        
+        return False
     
     def check_roll_2L_ATT_15(self):
         if self.line1 in single_lines_dict['ATT'] and self.line2 in double_lines_dict.get('ATT', []):
@@ -372,10 +355,12 @@ class potential:
         if not line or line == "Trash":
             return False
         import re
-        # CRITICAL: Check for Magic ATT FIRST and exclude it immediately
+        # CRITICAL: Check for Magic ATT FIRST and exclude it immediately (with or without space)
         # This must be done before any other checks to prevent false matches
-        if re.search(r'Magic\s+ATT', line, re.IGNORECASE):
-            return False  # Explicitly exclude Magic ATT
+        if (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or 
+            re.search(r'Magic\s*Attack\s*Power', line, re.IGNORECASE) or
+            re.search(r'MagicAttackPower', line, re.IGNORECASE)):
+            return False  # Explicitly exclude Magic ATT (handles "Magic ATT", "MagicATT", "MagicAttackPower", etc.)
         
         # Check exact match or pattern match (only ATT, not MATT)
         # Note: matches_line_pattern might match Magic ATT, so we check Magic ATT first above
@@ -386,13 +371,14 @@ class potential:
         # So we verify it's not Magic ATT after matching
         if matches_line_pattern(line, single_lines_dict['ATT']):
             # Double-check it's not Magic ATT (in case matches_line_pattern matched it)
-            if not re.search(r'Magic\s+ATT', line, re.IGNORECASE):
+            if not (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or re.search(r'Magic\s*Attack\s*Power', line, re.IGNORECASE)):
                 return True
         
         # Also check with regex for variations (exclude Magic ATT using negative lookbehind)
-        # Match ATT or Attack Power, but NOT Magic ATT
-        # Use negative lookbehind to ensure ATT is not preceded by "Magic "
-        return bool(re.search(r'(?<!Magic\s)(ATT|Attack\s+Power)\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+        # Match ATT or Attack Power (with or without space), but NOT Magic ATT
+        # Use negative lookbehind to ensure ATT is not preceded by "Magic " (with space)
+        # For cases without space (MagicATT), we already checked above
+        return bool(re.search(r'(?<!Magic\s)(ATT|Attack\s+Power|AttackPower)\s*:?\s*\+?\d+%', line, re.IGNORECASE))
     
     def _has_magic_att(self, line):
         """Check if line contains Magic ATT specifically"""
@@ -403,8 +389,9 @@ class potential:
         if (line in single_lines_dict['MATT'] or 
                 matches_line_pattern(line, single_lines_dict['MATT'])):
             return True
-        # Also check with regex for variations
-        return bool(re.search(r'Magic\s+ATT\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+        # Also check with regex for variations (handles both "Magic ATT" and "MagicATT")
+        return bool(re.search(r'Magic\s*ATT\s*:?\s*\+?\d+%', line, re.IGNORECASE) or 
+                   re.search(r'Magic\s*Attack\s*Power\s*:?\s*\+?\d+%', line, re.IGNORECASE))
     
     def _has_ignore_defense(self, line):
         """Check if line contains Ignore Defense (IED) - only actual IED stat lines, not damage reduction chance"""
@@ -414,7 +401,8 @@ class potential:
         # Use strict regex pattern matching - only match actual IED stat lines
         # Exclude "X% chance to ignore Y% damage" lines (those are damage reduction, not IED)
         ied_patterns = [
-            r'Ignore\s+Defense\s*:?\s*\+?\d+%',  # "Ignore Defense +35%"
+            r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?\d+%',  # "Ignore Defense +35%" (handles OCR errors where 'o'→'a'/'e' and 'e'→'a'/'e', with space)
+            r'Ign[aoe]r[ae]Defense\s*:?\s*\+?\d+%',  # "IgnareDefense+40%" (handles OCR errors where 'o'→'a'/'e' and 'e'→'a'/'e', no space)
             r'Attacks\s+ignore\s+\d+%\s+Monster(?:\s+Defense)?',  # "Attacks ignore 35% Monster" or "Attacks ignore 35% Monster Defense"
         ]
         for pattern in ied_patterns:
@@ -437,28 +425,37 @@ class potential:
         return bool(re.search(r'Critical\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE))
     
     def _has_item_drop_rate(self, line):
-        """Check if line contains Item Drop Rate"""
+        """Check if line contains Item Drop Rate - gracefully handles OCR errors"""
         if not line or line == "Trash":
             return False
         import re
-        # Check for Item Acquisition Rate (IA) which is the same as Item Drop Rate
+        # Check exact match or pattern match (same pattern as MATT, BD, IED)
         if (line in single_lines_dict['IA'] or 
-                matches_line_pattern(line, single_lines_dict['IA']) or
-                matches_line_pattern(line, double_lines_dict.get('Drop', []))):
+                matches_line_pattern(line, single_lines_dict['IA'])):
             return True
-        # Also check with regex for variations
-        return bool(re.search(r'(Item|tem)\s+(Acquisition\s+Rate|Drop\s+Rate)\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+        
+        # Match "Item Drop Rate" with OCR error tolerance
+        # Handles variations like: "Item Drop Rate +20%", "ltemDropRate+20%", "tem Dr0p Rat3", etc.
+        # No % check to handle cases where % is misread by OCR
+        # Spaces are optional to handle cases like "ltemDropRate"
+        return bool(re.search(r'\b(Item|tem|Itern|ltem)\s*(Drop|Dr0p)\s*(Rate|Rat3)', line, re.IGNORECASE))
     
     def _has_meso_obtained(self, line):
-        """Check if line contains Meso Obtained"""
+        """Check if line contains Meso Obtained - gracefully handles OCR errors"""
         if not line or line == "Trash":
             return False
         import re
-        # Check for Meso Drop Rate patterns
-        if matches_line_pattern(line, double_lines_dict.get('MnD', [])):
+        # Check exact match or pattern match (same pattern as MATT, BD, IED)
+        meso_dict = double_lines_dict.get('MnD', [])
+        if (line in meso_dict or 
+                matches_line_pattern(line, meso_dict)):
             return True
-        # Also check with regex for variations
-        return bool(re.search(r'(Meso|Meso\s+Obtained|Meso\s+Drop)\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+        
+        # Match "Meso Obtained" with OCR error tolerance
+        # Handles variations like: "Meso Obtained +20%", "MesosObtained+20%", "Mes0 Obtain3d", etc.
+        # No % check to handle cases where % is misread by OCR
+        # Spaces are optional to handle cases like "MesosObtained"
+        return bool(re.search(r'\b(Meso|Mesos|Mes0|Mes\s+o)\s*(Obtained|Obtain3d)', line, re.IGNORECASE))
     
     def _line_matches_stat_type(self, line, stat_type):
         """Check if a line matches a given stat type"""
@@ -501,15 +498,23 @@ class potential:
         matched_lines = []
         
         # Check each line against all selected stat types
+        # Handle comma-separated stats in a single line
         for line in lines_to_check:
             if line and line != "Trash":
-                for stat_type in stat_types:
-                    if self._line_matches_stat_type(line, stat_type):
-                        matching_count += 1
-                        matched_lines.append((line, stat_type))
-                        # Debug: log what matched (can be removed later)
-                        print(f"[DEBUG] Line matched {stat_type}: {repr(line)}")
-                        break  # Count each line only once
+                # Split by comma to handle multiple stats in one line
+                parts = [part.strip() for part in line.split(',')]
+                for part in parts:
+                    for stat_type in stat_types:
+                        if self._line_matches_stat_type(part, stat_type):
+                            matching_count += 1
+                            matched_lines.append((part, stat_type))
+                            # Debug: log what matched (can be removed later)
+                            print(f"[DEBUG] Stat matched {stat_type}: {repr(part)}")
+                            break  # Count each stat only once
+                    if matching_count >= required_count:
+                        break  # Stop if we have enough matches
+                if matching_count >= required_count:
+                    break  # Stop checking lines if we have enough matches
         print("--------------------------------")
         
         # Stop if we have enough matching lines
@@ -633,19 +638,6 @@ class potential:
             if self.check_roll_flexible(stat_types, required_count):
                 checks_passed = True
         
-        # Stat-specific checks from config
-        for stat_check in config["stat_checks"]:
-            check_type = stat_check.get("type")
-            stat = stat_check.get("stat")
-            min_value = stat_check.get("min_value", 0)
-            
-            if check_type == "2L_stat":
-                if self.check_roll_2L_stat(stat, min_value_per_line=min_value):
-                    checks_passed = True
-            elif check_type == "1L_stat":
-                if self.check_roll_1L_stat(stat, min_value=min_value):
-                    checks_passed = True
-        
         if checks_passed or self.stop_bot:
             print("Initial potential already satisfies conditions! Stopping bot.")
             return
@@ -692,14 +684,64 @@ class potential:
                 lines_match = (roll1_lines == roll2_lines == roll3_lines)
                 
                 if stats_match or lines_match:
-                    self.stop_bot = True
-                    lines_str = f"{self.line1}, {self.line2}"
-                    if self.line3 and self.line3 != "Trash":
-                        lines_str += f", {self.line3}"
-                    result_text = f"{lines_str}    STOP (Cubes used up - same stats 3 times in a row)"
-                    self._send_ocr_result(result_text)
-                    print("Cubes used up - same stats detected 3 times in a row. Stopping bot.")
-                    return
+                    # Additional check: verify if reset button is unavailable (grayed out)
+                    # If button is still available, it's a false positive - keep trying
+                    try:
+                        # Get current window screenshot to check reset button state
+                        potlines_instance = get_potlines()
+                        if potlines_instance and potlines_instance.wincap:
+                            current_image = potlines_instance.wincap.get_screenshot()
+                            if current_image is not None:
+                                is_unavailable = is_reset_button_unavailable(current_image, debug=False)
+                                if not is_unavailable:
+                                    # Reset button is still available - false positive, continue
+                                    self._send_ocr_result("Same stats 3 times, but reset button is still available - continuing...")
+                                    print("Same stats detected 3 times, but reset button is still available. Continuing...")
+                                    # Clear the last three rolls to reset the counter
+                                    self.last_three_rolls = []
+                                    # Continue the loop instead of stopping
+                                    # Don't return, just skip the stop logic
+                                else:
+                                    # Reset button is unavailable - cubes are truly used up
+                                    self.stop_bot = True
+                                    lines_str = f"{self.line1}, {self.line2}"
+                                    if self.line3 and self.line3 != "Trash":
+                                        lines_str += f", {self.line3}"
+                                    result_text = f"{lines_str}    STOP (Cubes used up - reset button unavailable)"
+                                    self._send_ocr_result(result_text)
+                                    print("Cubes used up - reset button is unavailable (grayed out). Stopping bot.")
+                                    return
+                            else:
+                                # Couldn't get screenshot, use original logic
+                                self.stop_bot = True
+                                lines_str = f"{self.line1}, {self.line2}"
+                                if self.line3 and self.line3 != "Trash":
+                                    lines_str += f", {self.line3}"
+                                result_text = f"{lines_str}    STOP (Cubes used up - same stats 3 times in a row)"
+                                self._send_ocr_result(result_text)
+                                print("Cubes used up - same stats detected 3 times in a row. Stopping bot.")
+                                return
+                        else:
+                            # No window capture available, use original logic
+                            self.stop_bot = True
+                            lines_str = f"{self.line1}, {self.line2}"
+                            if self.line3 and self.line3 != "Trash":
+                                lines_str += f", {self.line3}"
+                            result_text = f"{lines_str}    STOP (Cubes used up - same stats 3 times in a row)"
+                            self._send_ocr_result(result_text)
+                            print("Cubes used up - same stats detected 3 times in a row. Stopping bot.")
+                            return
+                    except Exception as e:
+                        # Error checking reset button, use original logic
+                        print(f"Error checking reset button state: {e}")
+                        self.stop_bot = True
+                        lines_str = f"{self.line1}, {self.line2}"
+                        if self.line3 and self.line3 != "Trash":
+                            lines_str += f", {self.line3}"
+                        result_text = f"{lines_str}    STOP (Cubes used up - same stats 3 times in a row)"
+                        self._send_ocr_result(result_text)
+                        print("Cubes used up - same stats detected 3 times in a row. Stopping bot.")
+                        return
             
             # Stat threshold checking (if enabled)
             if config["stopAtStatThreshold"]:
@@ -711,17 +753,6 @@ class potential:
                 stat_types = flex_config.get("stat_types", [])
                 required_count = flex_config.get("required_count", 2)
                 self.check_roll_flexible(stat_types, required_count)
-            
-            # Stat-specific checks from config
-            for stat_check in config["stat_checks"]:
-                check_type = stat_check.get("type")
-                stat = stat_check.get("stat")
-                min_value = stat_check.get("min_value", 0)
-                
-                if check_type == "2L_stat":
-                    self.check_roll_2L_stat(stat, min_value_per_line=min_value)
-                elif check_type == "1L_stat":
-                    self.check_roll_1L_stat(stat, min_value=min_value)
             
             # Check if we should stop (potential passed)
             if self.stop_bot:

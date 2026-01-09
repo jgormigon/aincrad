@@ -78,10 +78,10 @@ stat_patterns = {
     "INT": [r'INT\s*:?\s*\+?(\d+)%', r'INT\s*\+(\d+)%'],
     "LUK": [r'LUK\s*:?\s*\+?(\d+)%', r'LUK\s*\+(\d+)%'],  # Added optional + for missing + cases
     "ALL": [r'All\s+Stats\s*:?\s*\+?(\d+)%', r'All\s+Stats\s*\+(\d+)%', r'All\s*:?\s*\+?(\d+)%', r'Allstats\s*:?\s*\+?(\d+)%', r'Allstats\s*\+(\d+)%', r'Alistats\s*:?\s*\+?(\d+)%', r'Alistats\s*\+(\d+)%', r'Alstats\s*:?\s*\+?(\d+)%', r'Alstats\s*\+(\d+)%'],
-    "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+?(\d+)%', r'(?<!Magic\s)ATT\s*\+(\d+)%', r'Attack\s+Power\s*:?\s*\+?(\d+)%', r'Attack\s+Power\s*\+(\d+)%'],
-    "MATT": [r'Magic\s+ATT\s*:?\s*\+?(\d+)%', r'Magic\s+ATT\s*\+(\d+)%'],
+    "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+?(\d+)%', r'(?<!Magic\s)ATT\s*\+(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*:?\s*\+?(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*\+(\d+)%', r'(?<!Magic)AttackPower\s*:?\s*\+?(\d+)%', r'(?<!Magic)AttackPower\s*\+(\d+)%'],
+    "MATT": [r'Magic\s+ATT\s*:?\s*\+?(\d+)%', r'Magic\s+ATT\s*\+(\d+)%', r'MagicATT\s*:?\s*\+?(\d+)%', r'MagicATT\s*\+(\d+)%', r'Magic\s+Attack\s+Power\s*:?\s*\+?(\d+)%', r'Magic\s+Attack\s+Power\s*\+(\d+)%', r'MagicAttackPower\s*:?\s*\+?(\d+)%', r'MagicAttackPower\s*\+(\d+)%'],
     "BD": [r'Boss\s+Damage\s*:?\s*\+?(\d+)%', r'Boss\s+Damage\s*\+(\d+)%'],
-    "IED": [r'Ignore\s+Defense\s*:?\s*\+?(\d+)%', r'Ignore\s+Defense\s*\+(\d+)%', r'Attacks\s+ignore\s+(\d+)%\s+Monster(?:\s+Defense)?']
+    "IED": [r'Ign[aoe]r[ae]Defense\s*\+(\d+)%', r'Ign[aoe]r[ae]Defense\s*:?\s*\+?(\d+)%', r'Ign[aoe]r[ae]\s+Defense\s*\+(\d+)%', r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?(\d+)%', r'Attacks\s+ignore\s+(\d+)%\s+Monster(?:\s+Defense)?']
 }
 def get_lines(window_name=None, debug=False, crop_region=None, test_image_path=None, auto_detect_crop=False, cube_type="Glowing"):
     try:
@@ -180,13 +180,13 @@ def fix_missing_plus_sign(line):
     # Stat name patterns (case-insensitive) - order matters (longer patterns first)
     stat_patterns = [
         (r'(All\s+Stats?|Allstats?|Alistats?|Alstats?)', 'ALL'),  # All stats variations
-        (r'(Magic\s+ATT)', 'MATT'),  # Magic ATT
-        (r'(Attack\s+Power)', 'ATT'),  # Attack Power (full)
+        (r'(Magic\s+ATT|MagicATT|Magic\s+Attack\s+Power|MagicAttackPower)', 'MATT'),  # Magic ATT (with or without space)
+        (r'(Attack\s+Power|AttackPower)', 'ATT'),  # Attack Power (with or without space)
         (r'(Boss\s+Damage)', 'BD'),  # Boss Damage
-        (r'(Ignore\s+Defense)', 'IED'),  # Ignore Defense
+        (r'(Ign[aoe]r[ae]\s+Defense|Ign[aoe]r[ae]Defense)', 'IED'),  # Ignore Defense (handles OCR errors where 'o'→'a'/'e' and 'e'→'a'/'e', with or without space)
         (r'(Critical\s+Damage)', 'CD'),  # Critical Damage
         (r'(STR|DEX|INT|LUK)', 'STAT'),  # Single stat
-        (r'(ATT)', 'ATT'),  # ATT (short)
+        (r'(ATT)', 'ATT'),  # ATT (short) - but check for Magic first
     ]
     
     # Try to find and fix missing + signs
@@ -203,6 +203,13 @@ def fix_missing_plus_sign(line):
             before = match.group(1).strip()
             stat = match.group(2)
             number = match.group(3)
+            
+            # Special handling: exclude Magic before AttackPower/ATT for ATT stat type
+            if stat_type == 'ATT':
+                # Check if "Magic" appears before the stat (with or without space)
+                full_match = match.group(0)
+                if re.search(r'Magic\s*Attack\s*Power|MagicAttackPower|Magic\s*ATT|MagicATT', full_match, re.IGNORECASE):
+                    return full_match  # Don't fix, this is Magic ATT
             
             # Check if text before is likely noise
             # Noise indicators:
@@ -365,7 +372,7 @@ def matches_line_pattern(line, pattern_list):
         "INT": [r'INT\s*:?\s*\+(\d+)%', r'INT\s*\+(\d+)%'],
         "LUK": [r'LUK\s*:?\s*\+(\d+)%', r'LUK\s*\+(\d+)%'],
         "ALL": [r'All\s+Stats\s*:?\s*\+(\d+)%', r'All\s+Stats\s*\+(\d+)%', r'All\s*:?\s*\+(\d+)%', r'Allstats\s*:?\s*\+(\d+)%', r'Allstats\s*\+(\d+)%', r'Alistats\s*:?\s*\+(\d+)%', r'Alistats\s*\+(\d+)%', r'Alstats\s*:?\s*\+(\d+)%', r'Alstats\s*\+(\d+)%'],
-        "ATT": [r'ATT\s*:?\s*\+(\d+)%', r'ATT\s*\+(\d+)%', r'Attack\s+Power\s*:?\s*\+(\d+)%', r'Attack\s+Power\s*\+(\d+)%']
+        "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+(\d+)%', r'(?<!Magic\s)ATT\s*\+(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*:?\s*\+(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*\+(\d+)%']
     }
     
     for stat_type, patterns in stat_patterns_to_check.items():
@@ -461,7 +468,8 @@ def set_lines(splitlines):
                 elif re.search(r'Boss\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE):
                     matched_indices.append(i)
                 # Check if it looks like IED (Ignore Defense) - exclude "chance to ignore" lines
-                elif (re.search(r'Ignore\s+Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or 
+                elif (re.search(r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or 
+                      re.search(r'Ign[aoe]r[ae]Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or
                       re.search(r'Attacks\s+ignore\s+\d+%\s+Monster', line, re.IGNORECASE)) and \
                      not re.search(r'chance\s+to\s+ignore', line, re.IGNORECASE):
                     matched_indices.append(i)
@@ -537,7 +545,8 @@ def set_lines(splitlines):
                         if len(matched_indices) >= 3:
                             break
                     # Check for IED - exclude "chance to ignore" lines (damage reduction, not IED)
-                    elif (re.search(r'Ignore\s+Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or 
+                    elif (re.search(r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or 
+                          re.search(r'Ign[aoe]r[ae]Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or
                           re.search(r'Attacks\s+ignore\s+\d+%\s+Monster', line, re.IGNORECASE)) and \
                          not re.search(r'chance\s+to\s+ignore', line, re.IGNORECASE):
                         matched_indices.append(i)
@@ -572,6 +581,14 @@ def extract_stat_value(line, stat_type):
     if stat_type not in stat_patterns:
         return 0
     
+    # Special handling for ATT: exclude if "Magic" appears before ATT/Attack Power
+    if stat_type == "ATT":
+        # Check if "Magic" appears before ATT or Attack Power (with or without space)
+        if (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or 
+            re.search(r'Magic\s*Attack\s*Power', line, re.IGNORECASE) or
+            re.search(r'MagicAttackPower', line, re.IGNORECASE)):
+            return 0  # This is Magic ATT, not regular ATT
+    
     for pattern in stat_patterns[stat_type]:
         match = re.search(pattern, line, re.IGNORECASE)
         if match:
@@ -583,6 +600,8 @@ def get_stat_from_line(line):
     Determine which stat type a line contains and return (stat_type, value).
     Returns (None, 0) if no stat is found.
     Note: Check MATT before ATT to avoid matching Magic ATT as regular ATT.
+    This function returns only the FIRST stat found in the line.
+    For lines with multiple stats, use get_all_stats_from_line().
     """
     # Check MATT first to avoid matching it as ATT
     for stat_type in ["STR", "DEX", "INT", "LUK", "ALL", "MATT", "ATT", "BD", "IED"]:
@@ -590,6 +609,29 @@ def get_stat_from_line(line):
         if value > 0:
             return (stat_type, value)
     return (None, 0)
+
+def get_all_stats_from_line(line):
+    """
+    Extract all stats from a line (handles comma-separated stats).
+    Returns a list of (stat_type, value) tuples.
+    """
+    if not line or line == "Trash":
+        return []
+    
+    stats = []
+    # Split by comma to handle multiple stats in one line
+    parts = [part.strip() for part in line.split(',')]
+    
+    # Check each part for stats
+    for part in parts:
+        # Check MATT first to avoid matching it as ATT
+        for stat_type in ["STR", "DEX", "INT", "LUK", "ALL", "MATT", "ATT", "BD", "IED"]:
+            value = extract_stat_value(part, stat_type)
+            if value > 0:
+                stats.append((stat_type, value))
+                break  # Only count each part once (first matching stat)
+    
+    return stats
 
 def process_lines(window_name=None, debug=False, crop_region=None, test_image_path=None, auto_detect_crop=False, cube_type="Glowing"):
     try:
