@@ -73,15 +73,16 @@ double_lines_list = ['Attacks ignore 30% Monster', 'Attacks ignore 35% Monster',
 # Stat dictionaries - common OCR patterns for stat lines
 # These patterns account for OCR variations like "STR: +9%" or "STR +9%" or "STR:+9%"
 stat_patterns = {
-    "STR": [r'STR\s*:?\s*\+?(\d+)%', r'STR\s*\+(\d+)%'],  # Added optional + for missing + cases
-    "DEX": [r'DEX\s*:?\s*\+?(\d+)%', r'DEX\s*\+(\d+)%'],
-    "INT": [r'INT\s*:?\s*\+?(\d+)%', r'INT\s*\+(\d+)%'],
-    "LUK": [r'LUK\s*:?\s*\+?(\d+)%', r'LUK\s*\+(\d+)%'],  # Added optional + for missing + cases
-    "ALL": [r'All\s+Stats\s*:?\s*\+?(\d+)%', r'All\s+Stats\s*\+(\d+)%', r'All\s*:?\s*\+?(\d+)%', r'Allstats\s*:?\s*\+?(\d+)%', r'Allstats\s*\+(\d+)%', r'Alistats\s*:?\s*\+?(\d+)%', r'Alistats\s*\+(\d+)%', r'Alstats\s*:?\s*\+?(\d+)%', r'Alstats\s*\+(\d+)%'],
-    "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+?(\d+)%', r'(?<!Magic\s)ATT\s*\+(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*:?\s*\+?(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*\+(\d+)%', r'(?<!Magic)AttackPower\s*:?\s*\+?(\d+)%', r'(?<!Magic)AttackPower\s*\+(\d+)%'],
-    "MATT": [r'Magic\s+ATT\s*:?\s*\+?(\d+)%', r'Magic\s+ATT\s*\+(\d+)%', r'MagicATT\s*:?\s*\+?(\d+)%', r'MagicATT\s*\+(\d+)%', r'Magic\s+Attack\s+Power\s*:?\s*\+?(\d+)%', r'Magic\s+Attack\s+Power\s*\+(\d+)%', r'MagicAttackPower\s*:?\s*\+?(\d+)%', r'MagicAttackPower\s*\+(\d+)%'],
-    "BD": [r'Boss\s+Damage\s*:?\s*\+?(\d+)%', r'Boss\s+Damage\s*\+(\d+)%'],
-    "IED": [r'Ign[aoe]r[ae]Defense\s*\+(\d+)%', r'Ign[aoe]r[ae]Defense\s*:?\s*\+?(\d+)%', r'Ign[aoe]r[ae]\s+Defense\s*\+(\d+)%', r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?(\d+)%', r'Attacks\s+ignore\s+(\d+)%\s+Monster(?:\s+Defense)?']
+    "STR": [r'STR\s*:?\s*\+?(\d+)%+', r'STR\s*\+(\d+)%+'],  # Added optional + for missing + cases, %+ allows one or more %
+    "DEX": [r'DEX\s*:?\s*\+?(\d+)%+', r'DEX\s*\+(\d+)%+'],
+    "INT": [r'INT\s*:?\s*\+?(\d+)%+', r'INT\s*\+(\d+)%+'],
+    "LUK": [r'LUK\s*:?\s*\+?(\d+)%+', r'LUK\s*\+(\d+)%+'],  # Added optional + for missing + cases, %+ allows one or more %
+    "ALL": [r'All\s+Stats\s*:?\s*\+?(\d+)%+', r'All\s+Stats\s*\+(\d+)%+', r'All\s*:?\s*\+?(\d+)%+', r'Allstats\s*:?\s*\+?(\d+)%+', r'Allstats\s*\+(\d+)%+', r'Alistats\s*:?\s*\+?(\d+)%+', r'Alistats\s*\+(\d+)%+', r'Alstats\s*:?\s*\+?(\d+)%+', r'Alstats\s*\+(\d+)%+'],
+    "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+?(\d+)%+', r'(?<!Magic\s)ATT\s*\+(\d+)%+', r'(?<!Magic\s)A[ti]tack\s+Power\s*:?\s*\+?(\d+)%+', r'(?<!Magic\s)A[ti]tack\s+Power\s*\+(\d+)%+', r'(?<!Magic)A[ti]tackPower\s*:?\s*\+?(\d+)%+', r'(?<!Magic)A[ti]tackPower\s*\+(\d+)%+'],
+    "MATT": [r'Magic\s+ATT\s*:?\s*\+?(\d+)%+', r'Magic\s+ATT\s*\+(\d+)%+', r'MagicATT\s*:?\s*\+?(\d+)%+', r'MagicATT\s*\+(\d+)%+', r'Magic\s+A[ti]tack\s+Power\s*:?\s*\+?(\d+)%+', r'Magic\s+A[ti]tack\s+Power\s*\+(\d+)%+', r'MagicA[ti]tackPower\s*:?\s*\+?(\d+)%+', r'MagicA[ti]tackPower\s*\+(\d+)%+'],
+    "BD": [r'BossDamage\s*\+(\d+)%+', r'BossDamage\s*:?\s*\+?(\d+)%+', r'Boss\s+Damage\s*\+(\d+)%+', r'Boss\s+Damage\s*:?\s*\+?(\d+)%+'],
+    "CD": [r'CriticalDamage\s*\+(\d+)%+', r'CriticalDamage\s*:?\s*\+?(\d+)%+', r'Critical\s+Damage\s*\+(\d+)%+', r'Critical\s+Damage\s*:?\s*\+?(\d+)%+'],
+    "IED": [r'Ign[aoe]r[ae]Defense\s*\+(\d+)%+', r'Ign[aoe]r[ae]Defense\s*:?\s*\+?(\d+)%+', r'Ign[aoe]r[ae]\s+Defense\s*\+(\d+)%+', r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?(\d+)%+', r'Attacks\s+ignore\s+(\d+)%\s+Monster(?:\s+Defense)?']
 }
 def get_lines(window_name=None, debug=False, crop_region=None, test_image_path=None, auto_detect_crop=False, cube_type="Glowing"):
     try:
@@ -180,11 +181,11 @@ def fix_missing_plus_sign(line):
     # Stat name patterns (case-insensitive) - order matters (longer patterns first)
     stat_patterns = [
         (r'(All\s+Stats?|Allstats?|Alistats?|Alstats?)', 'ALL'),  # All stats variations
-        (r'(Magic\s+ATT|MagicATT|Magic\s+Attack\s+Power|MagicAttackPower)', 'MATT'),  # Magic ATT (with or without space)
-        (r'(Attack\s+Power|AttackPower)', 'ATT'),  # Attack Power (with or without space)
-        (r'(Boss\s+Damage)', 'BD'),  # Boss Damage
+        (r'(Magic\s+ATT|MagicATT|Magic\s+A[ti]tack\s+Power|MagicA[ti]tackPower)', 'MATT'),  # Magic ATT (handles OCR error "Aitack", with or without space)
+        (r'(A[ti]tack\s+Power|A[ti]tackPower)', 'ATT'),  # Attack Power (handles OCR error "Aitack", with or without space)
+        (r'(Boss\s+Damage|BossDamage)', 'BD'),  # Boss Damage (with or without space)
         (r'(Ign[aoe]r[ae]\s+Defense|Ign[aoe]r[ae]Defense)', 'IED'),  # Ignore Defense (handles OCR errors where 'o'→'a'/'e' and 'e'→'a'/'e', with or without space)
-        (r'(Critical\s+Damage)', 'CD'),  # Critical Damage
+        (r'(Critical\s+Damage|CriticalDamage)', 'CD'),  # Critical Damage (with or without space)
         (r'(STR|DEX|INT|LUK)', 'STAT'),  # Single stat
         (r'(ATT)', 'ATT'),  # ATT (short) - but check for Magic first
     ]
@@ -207,8 +208,9 @@ def fix_missing_plus_sign(line):
             # Special handling: exclude Magic before AttackPower/ATT for ATT stat type
             if stat_type == 'ATT':
                 # Check if "Magic" appears before the stat (with or without space)
+                # Handle OCR error "Aitack" (t→i)
                 full_match = match.group(0)
-                if re.search(r'Magic\s*Attack\s*Power|MagicAttackPower|Magic\s*ATT|MagicATT', full_match, re.IGNORECASE):
+                if re.search(r'Magic\s*A[ti]tack\s*Power|MagicA[ti]tackPower|Magic\s*ATT|MagicATT', full_match, re.IGNORECASE):
                     return full_match  # Don't fix, this is Magic ATT
             
             # Check if text before is likely noise
@@ -372,7 +374,7 @@ def matches_line_pattern(line, pattern_list):
         "INT": [r'INT\s*:?\s*\+(\d+)%', r'INT\s*\+(\d+)%'],
         "LUK": [r'LUK\s*:?\s*\+(\d+)%', r'LUK\s*\+(\d+)%'],
         "ALL": [r'All\s+Stats\s*:?\s*\+(\d+)%', r'All\s+Stats\s*\+(\d+)%', r'All\s*:?\s*\+(\d+)%', r'Allstats\s*:?\s*\+(\d+)%', r'Allstats\s*\+(\d+)%', r'Alistats\s*:?\s*\+(\d+)%', r'Alistats\s*\+(\d+)%', r'Alstats\s*:?\s*\+(\d+)%', r'Alstats\s*\+(\d+)%'],
-        "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+(\d+)%', r'(?<!Magic\s)ATT\s*\+(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*:?\s*\+(\d+)%', r'(?<!Magic\s)Attack\s+Power\s*\+(\d+)%']
+        "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+(\d+)%', r'(?<!Magic\s)ATT\s*\+(\d+)%', r'(?<!Magic\s)A[ti]tack\s+Power\s*:?\s*\+(\d+)%', r'(?<!Magic\s)A[ti]tack\s+Power\s*\+(\d+)%', r'(?<!Magic)A[ti]tackPower\s*:?\s*\+(\d+)%', r'(?<!Magic)A[ti]tackPower\s*\+(\d+)%']
     }
     
     for stat_type, patterns in stat_patterns_to_check.items():
@@ -455,33 +457,36 @@ def set_lines(splitlines):
             if matches_line_pattern(splitlines[i], single_lines_list):
                 matched_indices.append(i)
         
-        # Also check for stat lines (STR, DEX, INT, LUK, ALL, ATT) using regex
-        # and other potential lines (BD, IED, etc.) using fuzzy matching
-        for i in range(len(splitlines)):
-            if i not in matched_indices:
-                line = splitlines[i]
-                normalized = normalize_line(line)
-                # Check if it looks like a stat line (STR, DEX, INT, LUK, ALL, ATT)
-                if re.search(r'(STR|DEX|INT|LUK|All\s+Stats?|ATT|Attack\s+Power)\s*:?\s*\+?\d+%', line, re.IGNORECASE):
-                    matched_indices.append(i)
-                # Check if it looks like Boss Damage
-                elif re.search(r'Boss\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE):
-                    matched_indices.append(i)
-                # Check if it looks like IED (Ignore Defense) - exclude "chance to ignore" lines
-                elif (re.search(r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or 
-                      re.search(r'Ign[aoe]r[ae]Defense\s*:?\s*\+?\d+%', line, re.IGNORECASE) or
-                      re.search(r'Attacks\s+ignore\s+\d+%\s+Monster', line, re.IGNORECASE)) and \
-                     not re.search(r'chance\s+to\s+ignore', line, re.IGNORECASE):
-                    matched_indices.append(i)
-                # Check if it looks like Critical Damage
-                elif re.search(r'Critical\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE):
-                    matched_indices.append(i)
-                # Check if it looks like Item Drop Rate
-                elif re.search(r'(Item|tem)\s+Drop\s+Rate\s*:?\s*\+?\d+%', line, re.IGNORECASE):
-                    matched_indices.append(i)
-                # Check if it looks like Magic ATT
-                elif re.search(r'Magic\s+ATT\s*:?\s*\+?\d+%', line, re.IGNORECASE):
-                    matched_indices.append(i)
+                # Also check for stat lines (STR, DEX, INT, LUK, ALL, ATT) using regex
+                # and other potential lines (BD, IED, etc.) using fuzzy matching
+                for i in range(len(splitlines)):
+                    if i not in matched_indices:
+                        line = splitlines[i]
+                        normalized = normalize_line(line)
+                        # Check if it looks like a stat line (STR, DEX, INT, LUK, ALL, ATT)
+                        # Use %+ to allow one or more % signs (handles OCR errors like "3%%" from "35%")
+                        if re.search(r'(STR|DEX|INT|LUK|All\s+Stats?|ATT|A[ti]tack\s+Power|A[ti]tackPower)\s*:?\s*\+?\d+%+', line, re.IGNORECASE):
+                            matched_indices.append(i)
+                        # Check if it looks like Boss Damage (with or without space)
+                        elif (re.search(r'Boss\s+Damage\s*:?\s*\+?\d+%+', line, re.IGNORECASE) or
+                              re.search(r'BossDamage\s*:?\s*\+?\d+%+', line, re.IGNORECASE)):
+                            matched_indices.append(i)
+                        # Check if it looks like IED (Ignore Defense) - exclude "chance to ignore" lines
+                        elif (re.search(r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?\d+%+', line, re.IGNORECASE) or 
+                              re.search(r'Ign[aoe]r[ae]Defense\s*:?\s*\+?\d+%+', line, re.IGNORECASE) or
+                              re.search(r'Attacks\s+ignore\s+\d+%\s+Monster', line, re.IGNORECASE)) and \
+                             not re.search(r'chance\s+to\s+ignore', line, re.IGNORECASE):
+                            matched_indices.append(i)
+                        # Check if it looks like Critical Damage (with or without space)
+                        elif (re.search(r'Critical\s+Damage\s*:?\s*\+?\d+%+', line, re.IGNORECASE) or
+                              re.search(r'CriticalDamage\s*:?\s*\+?\d+%+', line, re.IGNORECASE)):
+                            matched_indices.append(i)
+                        # Check if it looks like Item Drop Rate (with or without spaces)
+                        elif re.search(r'(Item|tem)\s*Drop\s*Rate\s*:?\s*\+?\d+%+', line, re.IGNORECASE):
+                            matched_indices.append(i)
+                        # Check if it looks like Magic ATT
+                        elif re.search(r'Magic\s+ATT\s*:?\s*\+?\d+%+', line, re.IGNORECASE):
+                            matched_indices.append(i)
         
         # If we found at least one matching line, use up to 3 lines
         if len(matched_indices) >= 1:
@@ -540,7 +545,7 @@ def set_lines(splitlines):
                 if i not in matched_indices and len(matched_indices) < 3:
                     line = splitlines[i]
                     # Check if it looks like a stat line or potential line
-                    if re.search(r'(STR|DEX|INT|LUK|All\s+Stats?|ATT|Attack\s+Power|Boss\s+Damage|Critical\s+Damage|(Item|tem)\s+Drop\s+Rate|Magic\s+ATT)\s*:?\s*\+?\d+%', line, re.IGNORECASE):
+                    if re.search(r'(STR|DEX|INT|LUK|All\s+Stats?|Allstats?|ATT|A[ti]tack\s+Power|A[ti]tackPower|Boss\s+Damage|BossDamage|Critical\s+Damage|CriticalDamage|(Item|tem)\s*Drop\s*Rate|Magic\s+ATT|MagicATT)\s*:?\s*\+?\d+%', line, re.IGNORECASE):
                         matched_indices.append(i)
                         if len(matched_indices) >= 3:
                             break
@@ -584,9 +589,10 @@ def extract_stat_value(line, stat_type):
     # Special handling for ATT: exclude if "Magic" appears before ATT/Attack Power
     if stat_type == "ATT":
         # Check if "Magic" appears before ATT or Attack Power (with or without space)
+        # Handle OCR error "Aitack" (t→i)
         if (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or 
-            re.search(r'Magic\s*Attack\s*Power', line, re.IGNORECASE) or
-            re.search(r'MagicAttackPower', line, re.IGNORECASE)):
+            re.search(r'Magic\s*A[ti]tack\s*Power', line, re.IGNORECASE) or
+            re.search(r'MagicA[ti]tackPower', line, re.IGNORECASE)):
             return 0  # This is Magic ATT, not regular ATT
     
     for pattern in stat_patterns[stat_type]:
@@ -604,7 +610,7 @@ def get_stat_from_line(line):
     For lines with multiple stats, use get_all_stats_from_line().
     """
     # Check MATT first to avoid matching it as ATT
-    for stat_type in ["STR", "DEX", "INT", "LUK", "ALL", "MATT", "ATT", "BD", "IED"]:
+    for stat_type in ["STR", "DEX", "INT", "LUK", "ALL", "MATT", "ATT", "BD", "CD", "IED"]:
         value = extract_stat_value(line, stat_type)
         if value > 0:
             return (stat_type, value)
@@ -625,7 +631,7 @@ def get_all_stats_from_line(line):
     # Check each part for stats
     for part in parts:
         # Check MATT first to avoid matching it as ATT
-        for stat_type in ["STR", "DEX", "INT", "LUK", "ALL", "MATT", "ATT", "BD", "IED"]:
+        for stat_type in ["STR", "DEX", "INT", "LUK", "ALL", "MATT", "ATT", "BD", "CD", "IED"]:
             value = extract_stat_value(part, stat_type)
             if value > 0:
                 stats.append((stat_type, value))

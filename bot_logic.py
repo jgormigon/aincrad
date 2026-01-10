@@ -1,6 +1,5 @@
 from translate_ocr_results import process_lines, get_stat_from_line, get_all_stats_from_line, extract_stat_value, get_potlines, matches_line_pattern
 from macro_controls import time_to_start , click, press_reset_spacebar
-from auto_detect_crop import is_reset_button_unavailable
 import keyboard
 import time
 import threading
@@ -72,7 +71,7 @@ class potential:
         Extract stat values from all lines (up to 3) and return a dictionary.
         ALL stats are added to STR, DEX, INT, and LUK as per reference logic.
         """
-        stats = {"STR": 0, "DEX": 0, "INT": 0, "LUK": 0, "ALL": 0, "ATT": 0, "MATT": 0, "BD": 0, "IED": 0}
+        stats = {"STR": 0, "DEX": 0, "INT": 0, "LUK": 0, "ALL": 0, "ATT": 0, "MATT": 0, "BD": 0, "CD": 0, "IED": 0}
         
         # Get stats from all lines
         lines_to_process = [self.line1, self.line2]
@@ -92,6 +91,8 @@ class potential:
                         stats["MATT"] += stat_value
                     elif stat_type == "BD":
                         stats["BD"] += stat_value
+                    elif stat_type == "CD":
+                        stats["CD"] += stat_value
                     elif stat_type == "IED":
                         stats["IED"] += stat_value
                     else:
@@ -149,6 +150,90 @@ class potential:
         
         return (normalize(self.line1), normalize(self.line2), normalize(self.line3))
     
+    def _is_garbage_ocr(self, line):
+        """
+        Check if a line is garbage OCR that should be ignored.
+        Returns True if the line is garbage, False if it contains valid stats.
+        
+        Based on user-provided examples, garbage patterns include:
+        - Damage reduction chance lines: "6%chancetoignare20%damagewhenattacked"
+        - Standalone "Damage" without context: "Damage+9%"
+        - Stat lines without %: "MagicATT+32", "AttackPower+32" (correct OCR, but unwanted format)
+        - "CriticalRate" (not "Critical Damage")
+        - Lines with only chance text
+        
+        Note: Double %% like "BossDamage+3%%" is actually "BossDamage+35%" where OCR misread "5" as "%".
+        This is a valid OCR error, not garbage - the stat patterns handle it by allowing %+ (one or more %).
+        
+        Note: Lines like "MagicATT+32" without % are correct OCR readings (the number 32 is exact),
+        but they don't match our stat patterns (which require %), so they don't extract stats and are filtered out.
+        """
+        if not line or line == "Trash":
+            return True
+        
+        import re
+        
+        # Check for damage reduction chance lines (these are not stats)
+        # Patterns like "6%chancetoignare20%damagewhenattacked", "10%chancetoignare40%damagewhenattackec"
+        if re.search(r'chancetoignare.*damagewhenattacked', line, re.IGNORECASE) or \
+           re.search(r'%chancetoignare.*damagewhenattacked', line, re.IGNORECASE) or \
+           re.search(r'chancetoignare.*damagewhenattackec', line, re.IGNORECASE):
+            return True  # Damage reduction chance, not a stat
+        
+        # Check for standalone "Damage" without any stat context (garbage)
+        # This matches "Damage+9%" or "Damage+12%" but NOT "Boss Damage+40%" or "Critical Damage+6%"
+        # Must check that it's at start of line or after comma, and not preceded by a stat word
+        if re.search(r'(^|,\s*)Damage\s*\+?\d+%', line, re.IGNORECASE) or \
+           re.search(r'(^|,\s*)Damage\s*\+?\d+$', line, re.IGNORECASE):
+            # Make sure it's not "Boss Damage" or "Critical Damage" - check for preceding words
+            if not re.search(r'(Boss|Critical)\s+Damage', line, re.IGNORECASE):
+                return True  # Just "Damage" without context, garbage
+        
+        # Note: Double %% like "BossDamage+3%%" is actually valid OCR error where "35%" is misread as "3%%"
+        # (the "5" is read as "%"), so we don't mark it as garbage - the stat extraction will handle it
+        
+        # Check for stat lines without % at the end (like "MagicATT+32", "AttackPower+32")
+        # These are correct OCR readings, but they don't match our stat patterns (which require %),
+        # so they don't extract stats and should be classified as garbage/unwanted
+        # Check if line ends with stat+number (no %) or if there's a stat+number pattern followed by comma/end without %
+        if re.search(r'(MagicATT|AttackPower|MagicAttackPower|AitackPower)\+?\d+($|,)', line, re.IGNORECASE):
+            # Stat line without % - correct OCR but unwanted format, classified as garbage
+            return True
+        
+        # Check for "CriticalRate" which is NOT "Critical Damage" (should be CD, not "CriticalRate")
+        # This is a different stat that shouldn't be recognized
+        if re.search(r'CriticalRate\s*\+?\d+', line, re.IGNORECASE):
+            return True  # "Critical Rate" is not "Critical Damage", likely OCR error
+        
+        # Check if line only contains chance text and no recognizable stats
+        # Lines like "%chancetoignare20%damagewhenattacked" or "10%chancetoignare40%damagewhenattackec"
+        # or starting with %chanceto
+        if re.search(r'^\d*%?chancetoignare', line, re.IGNORECASE) or \
+           re.search(r'^%chancetoignare', line, re.IGNORECASE) or \
+           re.search(r'^%chancetoIgnare', line, re.IGNORECASE):
+            return True  # Only chance text, no stats
+        
+        return False
+    
+    def _has_valid_stats_in_roll(self, stats, original_lines):
+        """
+        Check if a roll has valid stats (not garbage OCR).
+        Returns True if at least one valid stat is extracted.
+        
+        A roll is considered valid if it extracts at least one stat (sum > 0).
+        Garbage lines (like chance text, standalone Damage) don't extract stats, so they're automatically filtered.
+        
+        Args:
+            stats: Dictionary of stat values
+            original_lines: Tuple of (line1, line2, line3) original lines (not normalized) - kept for compatibility
+        """
+        # Check if stats are extracted (at least one non-zero stat)
+        # If we have stats extracted, at least one line must be valid
+        # Garbage lines (like "6%chancetoignare20%damagewhenattacked") don't extract any stats
+        has_stats = sum(stats.values()) > 0
+        
+        return has_stats
+    
     def get_total_stats_string(self):
         """
         Format the total stats as a string for display.
@@ -165,6 +250,10 @@ class potential:
         # Add BD (Boss Damage) if it exists
         if stats.get("BD", 0) > 0:
             stat_parts.append(f"BD: {stats['BD']}")
+        
+        # Add CD (Critical Damage) if it exists
+        if stats.get("CD", 0) > 0:
+            stat_parts.append(f"CD: {stats['CD']}")
         
         # Add IED (Ignore Defense) if it exists
         if stats.get("IED", 0) > 0:
@@ -339,7 +428,7 @@ class potential:
             return False
     
     def _has_boss_damage(self, line):
-        """Check if line contains Boss Damage"""
+        """Check if line contains Boss Damage (handles both "Boss Damage" and "BossDamage")"""
         if not line or line == "Trash":
             return False
         import re
@@ -347,8 +436,9 @@ class potential:
         if line in single_lines_dict['BD']:
             return True
         # Use strict regex pattern matching (more reliable than fuzzy matching)
-        # Only match if we see "Boss Damage" followed by a percentage
-        return bool(re.search(r'Boss\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+        # Only match if we see "Boss Damage" or "BossDamage" followed by a percentage
+        return bool(re.search(r'Boss\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE) or
+                   re.search(r'BossDamage\s*:?\s*\+?\d+%', line, re.IGNORECASE))
     
     def _has_attack_power(self, line):
         """Check if line contains Attack Power (ATT) - does NOT include Magic ATT"""
@@ -357,10 +447,11 @@ class potential:
         import re
         # CRITICAL: Check for Magic ATT FIRST and exclude it immediately (with or without space)
         # This must be done before any other checks to prevent false matches
+        # Handle OCR error "Aitack" (t→i)
         if (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or 
-            re.search(r'Magic\s*Attack\s*Power', line, re.IGNORECASE) or
-            re.search(r'MagicAttackPower', line, re.IGNORECASE)):
-            return False  # Explicitly exclude Magic ATT (handles "Magic ATT", "MagicATT", "MagicAttackPower", etc.)
+            re.search(r'Magic\s*A[ti]tack\s*Power', line, re.IGNORECASE) or
+            re.search(r'MagicA[ti]tackPower', line, re.IGNORECASE)):
+            return False  # Explicitly exclude Magic ATT (handles "Magic ATT", "MagicATT", "MagicAttackPower", "MagicAitackPower", etc.)
         
         # Check exact match or pattern match (only ATT, not MATT)
         # Note: matches_line_pattern might match Magic ATT, so we check Magic ATT first above
@@ -371,14 +462,15 @@ class potential:
         # So we verify it's not Magic ATT after matching
         if matches_line_pattern(line, single_lines_dict['ATT']):
             # Double-check it's not Magic ATT (in case matches_line_pattern matched it)
-            if not (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or re.search(r'Magic\s*Attack\s*Power', line, re.IGNORECASE)):
+            # Handle OCR error "Aitack" (t→i)
+            if not (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or re.search(r'Magic\s*A[ti]tack\s*Power', line, re.IGNORECASE)):
                 return True
         
         # Also check with regex for variations (exclude Magic ATT using negative lookbehind)
-        # Match ATT or Attack Power (with or without space), but NOT Magic ATT
+        # Match ATT or Attack Power (with or without space, handles OCR error "Aitack"), but NOT Magic ATT
         # Use negative lookbehind to ensure ATT is not preceded by "Magic " (with space)
         # For cases without space (MagicATT), we already checked above
-        return bool(re.search(r'(?<!Magic\s)(ATT|Attack\s+Power|AttackPower)\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+        return bool(re.search(r'(?<!Magic\s)(ATT|A[ti]tack\s+Power|A[ti]tackPower)\s*:?\s*\+?\d+%', line, re.IGNORECASE))
     
     def _has_magic_att(self, line):
         """Check if line contains Magic ATT specifically"""
@@ -389,9 +481,10 @@ class potential:
         if (line in single_lines_dict['MATT'] or 
                 matches_line_pattern(line, single_lines_dict['MATT'])):
             return True
-        # Also check with regex for variations (handles both "Magic ATT" and "MagicATT")
+        # Also check with regex for variations (handles both "Magic ATT" and "MagicATT", and OCR error "Aitack")
         return bool(re.search(r'Magic\s*ATT\s*:?\s*\+?\d+%', line, re.IGNORECASE) or 
-                   re.search(r'Magic\s*Attack\s*Power\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+                   re.search(r'Magic\s*A[ti]tack\s*Power\s*:?\s*\+?\d+%', line, re.IGNORECASE) or
+                   re.search(r'MagicA[ti]tackPower\s*:?\s*\+?\d+%', line, re.IGNORECASE))
     
     def _has_ignore_defense(self, line):
         """Check if line contains Ignore Defense (IED) - only actual IED stat lines, not damage reduction chance"""
@@ -413,7 +506,7 @@ class potential:
         return False
     
     def _has_crit_damage(self, line):
-        """Check if line contains Critical Damage"""
+        """Check if line contains Critical Damage (handles both "Critical Damage" and "CriticalDamage")"""
         if not line or line == "Trash":
             return False
         import re
@@ -421,8 +514,9 @@ class potential:
         if (line in single_lines_dict['CD'] or 
                 matches_line_pattern(line, single_lines_dict['CD'])):
             return True
-        # Also check with regex for variations
-        return bool(re.search(r'Critical\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE))
+        # Also check with regex for variations (with or without space)
+        return bool(re.search(r'Critical\s+Damage\s*:?\s*\+?\d+%', line, re.IGNORECASE) or
+                   re.search(r'CriticalDamage\s*:?\s*\+?\d+%', line, re.IGNORECASE))
     
     def _has_item_drop_rate(self, line):
         """Check if line contains Item Drop Rate - gracefully handles OCR errors"""
@@ -663,77 +757,36 @@ class potential:
             # Check if cubes are used up (same stats 3 times in a row)
             # Compare based on extracted stats, not raw text, to handle OCR variations
             current_stats = self.get_stat_values()
-            # Also normalize lines for comparison (remove OCR noise like colons, spacing)
+            # Store original lines for garbage detection, and normalized lines for comparison
+            original_lines = (self.line1, self.line2, self.line3)
             normalized_lines = self._normalize_lines_for_comparison()
-            current_roll = (normalized_lines, current_stats)
+            current_roll = (original_lines, normalized_lines, current_stats)
             
             self.last_three_rolls.append(current_roll)
             if len(self.last_three_rolls) > 3:
                 self.last_three_rolls.pop(0)  # Keep only last 3
             
             # If we have 3 rolls and they're all the same, cubes are used up
-            # Compare both normalized lines and stats for robustness
+            # Compare based on extracted stats, not raw text, to handle OCR variations
             if len(self.last_three_rolls) == 3:
-                roll1_lines, roll1_stats = self.last_three_rolls[0]
-                roll2_lines, roll2_stats = self.last_three_rolls[1]
-                roll3_lines, roll3_stats = self.last_three_rolls[2]
+                roll1_orig, roll1_norm, roll1_stats = self.last_three_rolls[0]
+                roll2_orig, roll2_norm, roll2_stats = self.last_three_rolls[1]
+                roll3_orig, roll3_norm, roll3_stats = self.last_three_rolls[2]
                 
-                # Check if stats are the same (primary check - most reliable)
-                stats_match = (roll1_stats == roll2_stats == roll3_stats)
-                # Also check if normalized lines are similar (secondary check)
-                lines_match = (roll1_lines == roll2_lines == roll3_lines)
+                # Check if all three rolls have valid stats (not garbage OCR)
+                roll1_valid = self._has_valid_stats_in_roll(roll1_stats, roll1_orig)
+                roll2_valid = self._has_valid_stats_in_roll(roll2_stats, roll2_orig)
+                roll3_valid = self._has_valid_stats_in_roll(roll3_stats, roll3_orig)
                 
-                if stats_match or lines_match:
-                    # Additional check: verify if reset button is unavailable (grayed out)
-                    # If button is still available, it's a false positive - keep trying
-                    try:
-                        # Get current window screenshot to check reset button state
-                        potlines_instance = get_potlines()
-                        if potlines_instance and potlines_instance.wincap:
-                            current_image = potlines_instance.wincap.get_screenshot()
-                            if current_image is not None:
-                                is_unavailable = is_reset_button_unavailable(current_image, debug=False)
-                                if not is_unavailable:
-                                    # Reset button is still available - false positive, continue
-                                    self._send_ocr_result("Same stats 3 times, but reset button is still available - continuing...")
-                                    print("Same stats detected 3 times, but reset button is still available. Continuing...")
-                                    # Clear the last three rolls to reset the counter
-                                    self.last_three_rolls = []
-                                    # Continue the loop instead of stopping
-                                    # Don't return, just skip the stop logic
-                                else:
-                                    # Reset button is unavailable - cubes are truly used up
-                                    self.stop_bot = True
-                                    lines_str = f"{self.line1}, {self.line2}"
-                                    if self.line3 and self.line3 != "Trash":
-                                        lines_str += f", {self.line3}"
-                                    result_text = f"{lines_str}    STOP (Cubes used up - reset button unavailable)"
-                                    self._send_ocr_result(result_text)
-                                    print("Cubes used up - reset button is unavailable (grayed out). Stopping bot.")
-                                    return
-                            else:
-                                # Couldn't get screenshot, use original logic
-                                self.stop_bot = True
-                                lines_str = f"{self.line1}, {self.line2}"
-                                if self.line3 and self.line3 != "Trash":
-                                    lines_str += f", {self.line3}"
-                                result_text = f"{lines_str}    STOP (Cubes used up - same stats 3 times in a row)"
-                                self._send_ocr_result(result_text)
-                                print("Cubes used up - same stats detected 3 times in a row. Stopping bot.")
-                                return
-                        else:
-                            # No window capture available, use original logic
-                            self.stop_bot = True
-                            lines_str = f"{self.line1}, {self.line2}"
-                            if self.line3 and self.line3 != "Trash":
-                                lines_str += f", {self.line3}"
-                            result_text = f"{lines_str}    STOP (Cubes used up - same stats 3 times in a row)"
-                            self._send_ocr_result(result_text)
-                            print("Cubes used up - same stats detected 3 times in a row. Stopping bot.")
-                            return
-                    except Exception as e:
-                        # Error checking reset button, use original logic
-                        print(f"Error checking reset button state: {e}")
+                all_rolls_valid = roll1_valid and roll2_valid and roll3_valid
+                
+                # Only check for same stats if all three rolls have valid stats (not garbage)
+                if all_rolls_valid:
+                    # Check if stats are the same (primary check - most reliable)
+                    stats_match = (roll1_stats == roll2_stats == roll3_stats)
+                    
+                    if stats_match:
+                        # Same valid stats 3 times in a row - cubes are used up
                         self.stop_bot = True
                         lines_str = f"{self.line1}, {self.line2}"
                         if self.line3 and self.line3 != "Trash":
