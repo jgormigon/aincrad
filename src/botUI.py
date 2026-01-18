@@ -176,7 +176,7 @@ class BotGUI:
         header_frame = Frame(self.root, bg=COLORS['bg'])
         header_frame.pack(fill=X, padx=10, pady=(10, 5))
         
-        title_label = Label(header_frame, text="Maple Autocuber", 
+        title_label = Label(header_frame, text="Aincrad", 
                           font=("Arial", 18, "bold"), bg=COLORS['bg'], fg=COLORS['accent'])
         title_label.pack()
         
