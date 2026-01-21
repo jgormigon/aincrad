@@ -768,6 +768,8 @@ class BotGUI:
             flex_stat_types.append("IA")
         if self.flex_stat_meso.get():
             flex_stat_types.append("MESO")
+        if self.flex_stat_sc.get():
+            flex_stat_types.append("SC")
         
         config["flexible_roll_check"] = {
             "enabled": self.flex_check_enabled.get(),

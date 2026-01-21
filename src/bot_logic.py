@@ -559,10 +559,20 @@ class potential:
         if not line or line == "Trash":
             return False
         import re
+
+        # Normalize common OCR variations:
+        # - lowercasing
+        # - remove spaces and punctuation (keep only letters+digits)
+        # - this turns "SkillCooldowns2sec" / "Skill Cooldowns -2 sec" into similar strings
+        norm = re.sub(r'[^a-z0-9]', '', line.lower())
         # Match "Skill cooldowns -1 sec" or "Skill cooldowns -2 sec" with OCR variations
         # Handles variations like: "Skill Cooldowns -1 sec", "SkillCooldowns-2sec", "Skill cooldowns-1 sec", etc.
-        return bool(re.search(r'Skill\s+[Cc]ooldowns?\s*:?\s*-[12]\s*sec', line, re.IGNORECASE) or
-                   re.search(r'Skill[Cc]ooldowns?\s*:?\s*-[12]\s*sec', line, re.IGNORECASE))
+        # Match:
+        #  skillcooldown / skillcooldowns
+        #  optional minus (OCR may drop it)
+        #  1 or 2
+        #  sec or s (OCR sometimes outputs "2s")
+        return bool(re.search(r'sk[il][il][il]coo[il]d[oa]wns?-?([12])(sec|s)', norm))
     
     def _line_matches_stat_type(self, line, stat_type):
         """Check if a line matches a given stat type"""
