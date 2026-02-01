@@ -136,16 +136,9 @@ jobs:
             
             Download `Aincrad-*.zip`, extract the archive, and run `Aincrad.exe`.
             
-            ### Features
-            
-            - ✅ Standalone executable - no Python installation required
-            - ✅ Tesseract OCR bundled - no additional installation needed
-            - ✅ All dependencies included
-            
             ### Notes
-            
-            - Run as Administrator if you encounter permission issues
-            - The executable is large (~100MB+) because it includes Python and all dependencies
+      
+            - Run as Administrator
             
             ### Changes
             
