@@ -28,7 +28,8 @@ default_config = {
         "stat_types": [],  # List of stat types: ["BD", "ATT", "MATT", "IED", "CD", "IA", "MESO", "SC"]
         "required_count": 2  # Number of matching lines required (1, 2, or 3)
     },
-    "ocr_callback": None  # Callback function to update OCR results in GUI
+    "ocr_callback": None,  # Callback function to update OCR results in GUI
+    "ocr_preview_callback": None  # Callback (screenshot_bgr, crop_region) to show capture + crop in GUI
 }
 
 # Global config - will be set by GUI
@@ -61,7 +62,7 @@ class potential:
         test_image_path = config.get("test_image_path", None)
         auto_detect_crop = config.get("auto_detect_crop", False)
         cube_type = config.get("cube_type", "Glowing")
-        lines = process_lines(window_name, debug=False, crop_region=crop_region, test_image_path=test_image_path, auto_detect_crop=auto_detect_crop, cube_type=cube_type)
+        lines = process_lines(window_name, debug=False, crop_region=crop_region, test_image_path=test_image_path, auto_detect_crop=auto_detect_crop, cube_type=cube_type, ocr_preview_callback=config.get("ocr_preview_callback"))
         # Be defensive: process_lines() should return a 3-tuple, but guard anyway.
         self.line1 = lines[0] if isinstance(lines, (list, tuple)) and len(lines) > 0 else "Trash"
         self.line2 = lines[1] if isinstance(lines, (list, tuple)) and len(lines) > 1 else "Trash"

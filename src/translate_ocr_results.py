@@ -95,7 +95,7 @@ stat_patterns = {
     "IED": [r'Ign[aoe]r[ae]Defense\s*\+(\d+)%+', r'Ign[aoe]r[ae]Defense\s*:?\s*\+?(\d+)%+', r'Ign[aoe]r[ae]\s+Defense\s*\+(\d+)%+', r'Ign[aoe]r[ae]\s+Defense\s*:?\s*\+?(\d+)%+', r'Attacks\s+ignore\s+(\d+)%\s+Monster(?:\s+Defense)?'],
     "SC": [r'Skill\s+[Cc]ooldowns?\s*:?\s*-(\d+)\s*sec', r'Skill\s+[Cc]ooldowns?\s*-(\d+)\s*sec', r'Skill[Cc]ooldowns?\s*:?\s*-(\d+)\s*sec', r'Skill[Cc]ooldowns?\s*-(\d+)\s*sec']
 }
-def get_lines(window_name=None, debug=False, crop_region=None, test_image_path=None, auto_detect_crop=False, cube_type="Glowing"):
+def get_lines(window_name=None, debug=False, crop_region=None, test_image_path=None, auto_detect_crop=False, cube_type="Glowing", ocr_preview_callback=None):
     try:
         raw_lines = get_potlines(window_name, debug=debug, crop_region=crop_region, test_image_path=test_image_path, auto_detect_crop=auto_detect_crop, cube_type=cube_type)
         if raw_lines is None:
@@ -106,6 +106,13 @@ def get_lines(window_name=None, debug=False, crop_region=None, test_image_path=N
         # Always call get_ocr_result which will take a fresh screenshot
         # get_ocr_result() will save debug_original_image.png if debug is enabled
         lines = raw_lines.get_ocr_result(debug=debug)
+        
+        # Notify GUI with screen capture and crop region for preview (full screenshot + crop rect)
+        if ocr_preview_callback and getattr(raw_lines, 'last_screenshot', None) is not None:
+            try:
+                ocr_preview_callback(raw_lines.last_screenshot.copy(), getattr(raw_lines, 'crop_region', None))
+            except Exception:
+                pass
         
         if lines is None:
             if debug:
@@ -747,9 +754,9 @@ def get_all_stats_from_line(line):
     
     return stats
 
-def process_lines(window_name=None, debug=False, crop_region=None, test_image_path=None, auto_detect_crop=False, cube_type="Glowing"):
+def process_lines(window_name=None, debug=False, crop_region=None, test_image_path=None, auto_detect_crop=False, cube_type="Glowing", ocr_preview_callback=None):
     try:
-        lines = get_lines(window_name, debug=debug, crop_region=crop_region, test_image_path=test_image_path, auto_detect_crop=auto_detect_crop, cube_type=cube_type)
+        lines = get_lines(window_name, debug=debug, crop_region=crop_region, test_image_path=test_image_path, auto_detect_crop=auto_detect_crop, cube_type=cube_type, ocr_preview_callback=ocr_preview_callback)
         splitlines = split_lines(lines)
         if debug:
             print(f"[DEBUG] Split lines: {splitlines}")

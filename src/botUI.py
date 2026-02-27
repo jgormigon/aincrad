@@ -6,6 +6,9 @@ import win32gui
 import hashlib
 import secrets
 import keyboard
+import cv2
+import numpy as np
+from PIL import Image, ImageTk
 import src.tesseract_config  # Configure Tesseract before importing bot_logic
 from src.bot_logic import run_bot, default_config, bot_stop_event
 
@@ -632,6 +635,15 @@ class BotGUI:
                             bd=0, highlightthickness=0, padx=10, pady=3)
         clear_button.pack(pady=(5, 0))
         
+        # Screen capture + crop region preview (below OCR text)
+        preview_frame = LabelFrame(ocr_frame, text="Screen capture (crop region in red)", padx=5, pady=5,
+                                  bg=COLORS['frame_bg'], fg=COLORS['fg'], font=("Arial", 9, "bold"), relief=FLAT, bd=1)
+        preview_frame.pack(fill=BOTH, expand=False, pady=(10, 0))
+        self.ocr_preview_label = Label(preview_frame, text="No capture yet", bg=COLORS['entry_bg'], fg=COLORS['fg'],
+                                       font=("Arial", 9), relief=FLAT)
+        self.ocr_preview_label.pack(pady=5, padx=5)
+        self._ocr_preview_photo = None  # keep reference so image is not garbage-collected
+        
         # Hotkey Configuration
         hotkey_frame = LabelFrame(scrollable_frame, text="Hotkey Configuration", 
                                  padx=10, pady=10, bg=COLORS['frame_bg'], 
@@ -719,9 +731,65 @@ class BotGUI:
         self.ocr_results_text.see(END)  # Auto-scroll to bottom
         self.ocr_results_text.config(state=DISABLED)
     
+    def update_ocr_preview(self, screenshot_bgr, crop_region):
+        """Update the screen capture preview with crop region highlighted in red (call from any thread)."""
+        if screenshot_bgr is None or not getattr(screenshot_bgr, 'shape', None):
+            return
+        try:
+            img = np.asarray(screenshot_bgr)
+            if img.ndim != 2 and img.ndim != 3:
+                return
+            h, w = img.shape[:2]
+            if crop_region and len(crop_region) >= 4:
+                x, y, cw, ch = crop_region
+                # Crop region can be in pixels or 0–1 fractions
+                if x <= 1.0 and y <= 1.0 and cw <= 1.0 and ch <= 1.0:
+                    x_px = int(x * w)
+                    y_px = int(y * h)
+                    cw_px = int(cw * w)
+                    ch_px = int(ch * h)
+                else:
+                    x_px = int(x)
+                    y_px = int(y)
+                    cw_px = int(cw)
+                    ch_px = int(ch)
+                x_px = max(0, min(x_px, w - 1))
+                y_px = max(0, min(y_px, h - 1))
+                cw_px = max(1, min(cw_px, w - x_px))
+                ch_px = max(1, min(ch_px, h - y_px))
+                img = img.copy()
+                cv2.rectangle(img, (x_px, y_px), (x_px + cw_px, y_px + ch_px), (0, 0, 255), 2)
+            # Resize for display (max width 480)
+            max_w = 480
+            if w > max_w:
+                scale = max_w / w
+                new_w = max_w
+                new_h = int(h * scale)
+                img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            if img.ndim == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(img)
+            photo = ImageTk.PhotoImage(pil_img)
+            self.root.after(0, lambda p=photo: self._update_preview_image(p))
+        except Exception:
+            pass
+    
+    def _update_preview_image(self, photo):
+        """Set the preview label image (must be called from main thread)."""
+        self._ocr_preview_photo = photo
+        self.ocr_preview_label.config(image=photo, text="")
+    
     def clear_ocr_results(self):
-        """Clear the OCR results display"""
+        """Clear the OCR results display and preview."""
         self.root.after(0, lambda: self.ocr_results_text.config(state=NORMAL) or self.ocr_results_text.delete(1.0, END) or self.ocr_results_text.config(state=DISABLED))
+        self.root.after(0, self._clear_ocr_preview)
+    
+    def _clear_ocr_preview(self):
+        """Clear the OCR preview image (main thread)."""
+        self._ocr_preview_photo = None
+        self.ocr_preview_label.config(image="", text="No capture yet")
         
     def build_config(self):
         """Build configuration dictionary from GUI values"""
@@ -795,8 +863,9 @@ class BotGUI:
         
     def run_bot_thread(self):
         try:
-            # Pass OCR callback to bot config
+            # Pass OCR callbacks to bot config
             self.config["ocr_callback"] = self.update_ocr_results
+            self.config["ocr_preview_callback"] = self.update_ocr_preview
             run_bot(self.config)
         except Exception as e:
             self.update_ocr_results(f"Bot error: {str(e)}")
