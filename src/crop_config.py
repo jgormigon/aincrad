@@ -26,7 +26,7 @@ STAT_HEIGHT = 107
 # Bright cube offsets (different from Glowing cube)
 # For Bright cube, potential lines are under "AFTER" text
 # These offsets are relative to the Reset button position
-BRIGHT_OFFSET_X = 107
-BRIGHT_OFFSET_ABOVE = 232
-BRIGHT_STAT_WIDTH = 212
-BRIGHT_STAT_HEIGHT = 108
+BRIGHT_OFFSET_X = 167
+BRIGHT_OFFSET_ABOVE = 288
+BRIGHT_STAT_WIDTH = 184
+BRIGHT_STAT_HEIGHT = 97

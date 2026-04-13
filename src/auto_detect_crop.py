@@ -242,7 +242,17 @@ def detect_potential_region(image, debug=False, cube_type="Glowing"):
         print(f"[AUTO-DETECT] Input image dimensions: {img_width}x{img_height}")
     
     # Method 1: Try template matching first (more reliable than OCR)
-    reset_pos = find_reset_button_template(image, debug=debug)
+    # Bright cube uses a different Reset button appearance.
+    template_path = None
+    target_reset_text = "reset"
+    target_reset_label = "Reset"
+    if cube_type == "Bright":
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        template_path = os.path.join(project_root, 'templates', 'reset_button_bright.jpg')
+        target_reset_text = "reset x1"
+        target_reset_label = "Reset x1"
+    reset_pos = find_reset_button_template(image, template_path=template_path, debug=debug)
     reset_found = False
     reset_x = None
     reset_y = None
@@ -261,7 +271,7 @@ def detect_potential_region(image, debug=False, cube_type="Glowing"):
         gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
         
         # Try different PSM modes (optimized - fewer modes for speed)
-        # PSM 6 works best for finding "Reset" button
+        # PSM 6 works best for finding Reset button text.
         ocr_configs = [
             ('--psm 6', 'uniform block'),  # Best for this use case
             ('--psm 11', 'sparse text'),   # Fallback
@@ -287,13 +297,14 @@ def detect_potential_region(image, debug=False, cube_type="Glowing"):
                         # Get OCR data with bounding boxes
                         ocr_data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, config=psm_config)
                         
-                        # Search for "Reset" button text
+                        # Search for Reset button text
                         for i, text in enumerate(ocr_data['text']):
                             text_lower = text.lower().strip()
                             # More flexible matching - check for exact or close match
                             if len(text_lower) > 0:
-                                # Check for "reset" - should be exact or close match
-                                if text_lower == 'reset' or 'reset' in text_lower:
+                                # For Bright cube, prefer "Reset x1".
+                                # For Glowing cube, match "Reset".
+                                if target_reset_text in text_lower:
                                     x = ocr_data['left'][i]
                                     y = ocr_data['top'][i]
                                     width = ocr_data['width'][i]
@@ -304,7 +315,7 @@ def detect_potential_region(image, debug=False, cube_type="Glowing"):
                                     if conf >= -1:  # -1 means no confidence data, but still valid
                                         all_potential_matches.append((x, y, width, height, conf, i, text, psm_config, img_name))
                                         if debug:
-                                            print(f"[AUTO-DETECT] Found 'Reset' text at: x={x}, y={y}, w={width}, h={height}, conf={conf}, text='{text}', psm={psm_config}, img={img_name}")
+                                            print(f"[AUTO-DETECT] Found '{target_reset_label}' text at: x={x}, y={y}, w={width}, h={height}, conf={conf}, text='{text}', psm={psm_config}, img={img_name}")
                     except Exception as e:
                         if debug:
                             print(f"[AUTO-DETECT] Error with PSM {psm_config}: {e}")
@@ -322,7 +333,7 @@ def detect_potential_region(image, debug=False, cube_type="Glowing"):
                     unique_matches.append(match)
             
             if debug:
-                print(f"[AUTO-DETECT] Found {len(unique_matches)} unique 'Reset' text matches")
+                print(f"[AUTO-DETECT] Found {len(unique_matches)} unique '{target_reset_label}' text matches")
             
             # If multiple matches found, use the one with highest confidence (usually there's only one)
             if len(unique_matches) > 0:
@@ -332,10 +343,10 @@ def detect_potential_region(image, debug=False, cube_type="Glowing"):
                 reset_x, reset_y, reset_w, reset_h, conf, idx, text, psm, img_name = unique_matches[0]
                 reset_found = True
                 if debug:
-                    print(f"[AUTO-DETECT] Found 'Reset' anchor at: x={reset_x}, y={reset_y}, w={reset_w}, h={reset_h}, text='{text}'")
+                    print(f"[AUTO-DETECT] Found '{target_reset_label}' anchor at: x={reset_x}, y={reset_y}, w={reset_w}, h={reset_h}, text='{text}'")
             else:
                 if debug:
-                    print(f"[AUTO-DETECT] No 'Reset' text found in OCR results")
+                    print(f"[AUTO-DETECT] No '{target_reset_label}' text found in OCR results")
                     # Debug: show what OCR actually found
                     try:
                         ocr_data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT, config='--psm 6')

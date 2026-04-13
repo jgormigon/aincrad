@@ -11,7 +11,7 @@ pyautogui>=0.9.54
 keyboard>=0.13.5
 
 # Windows API (for window capture)
-pywin32>=300
+pywin32>=300; platform_system == "Windows"
 mss>=9.0.0  # Desktop Duplication API for reliable window capture (Windows 10+)
 
 # Build tool (optional, for creating executables)

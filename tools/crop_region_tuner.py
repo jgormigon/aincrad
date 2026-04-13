@@ -3,20 +3,33 @@ Interactive GUI tool to tune crop region offsets in real-time
 """
 import cv2 as cv
 import numpy as np
-import pytesseract
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 import threading
+from src.auto_detect_crop import detect_potential_region
 
 # Try to import config, if it fails we'll use defaults
 try:
-    from src.crop_config import OFFSET_X, OFFSET_ABOVE, STAT_WIDTH, STAT_HEIGHT
+    from src.crop_config import (
+        OFFSET_X,
+        OFFSET_ABOVE,
+        STAT_WIDTH,
+        STAT_HEIGHT,
+        BRIGHT_OFFSET_X,
+        BRIGHT_OFFSET_ABOVE,
+        BRIGHT_STAT_WIDTH,
+        BRIGHT_STAT_HEIGHT,
+    )
 except ImportError:
     OFFSET_X = 200
     OFFSET_ABOVE = 200
     STAT_WIDTH = 350
     STAT_HEIGHT = 95
+    BRIGHT_OFFSET_X = 107
+    BRIGHT_OFFSET_ABOVE = 232
+    BRIGHT_STAT_WIDTH = 212
+    BRIGHT_STAT_HEIGHT = 108
 
 
 class CropRegionTuner:
@@ -33,6 +46,7 @@ class CropRegionTuner:
         self.reset_w = None
         self.reset_h = None
         self.image_path = None
+        self.cube_type = tk.StringVar(value="Glowing")
         
         # Current config values
         self.offset_x = tk.IntVar(value=OFFSET_X)
@@ -68,6 +82,14 @@ class CropRegionTuner:
         # Title
         title_label = tk.Label(right_frame, text="Crop Region Settings", font=("Arial", 14, "bold"))
         title_label.pack(pady=10)
+
+        # Cube type selector
+        cube_frame = tk.Frame(right_frame)
+        cube_frame.pack(pady=(0, 10), fill=tk.X)
+        tk.Label(cube_frame, text="Cube Type", font=("Arial", 10, "bold")).pack(anchor=tk.W)
+        cube_menu = tk.OptionMenu(cube_frame, self.cube_type, "Glowing", "Bright", command=self.on_cube_type_changed)
+        cube_menu.config(width=20)
+        cube_menu.pack(anchor=tk.W, pady=(4, 0))
         
         # Sliders
         self.create_slider(right_frame, "Offset X", self.offset_x, -500, 500, 
@@ -95,6 +117,21 @@ class CropRegionTuner:
         self.info_label = tk.Label(right_frame, text="", font=("Arial", 9), 
                                    wraplength=280, justify=tk.LEFT, fg="gray")
         self.info_label.pack(pady=10, padx=5)
+
+    def on_cube_type_changed(self, *_):
+        """Load defaults for the selected cube type and refresh preview."""
+        if self.cube_type.get() == "Bright":
+            self.offset_x.set(BRIGHT_OFFSET_X)
+            self.offset_above.set(BRIGHT_OFFSET_ABOVE)
+            self.stat_width.set(BRIGHT_STAT_WIDTH)
+            self.stat_height.set(BRIGHT_STAT_HEIGHT)
+        else:
+            self.offset_x.set(OFFSET_X)
+            self.offset_above.set(OFFSET_ABOVE)
+            self.stat_width.set(STAT_WIDTH)
+            self.stat_height.set(STAT_HEIGHT)
+        if self.original_image is not None:
+            self.detect_reset()
         
     def create_slider(self, parent, label, variable, min_val, max_val, tooltip):
         frame = tk.Frame(parent)
@@ -142,61 +179,26 @@ class CropRegionTuner:
         # Run detection in a thread to avoid freezing UI
         def detect_thread():
             try:
-                gray = cv.cvtColor(self.original_image, cv.COLOR_BGR2GRAY)
-                clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-                enhanced_gray = clahe.apply(gray)
-                
-                ocr_configs = [
-                    ('--psm 6', 'uniform block'),
-                    ('--psm 11', 'sparse text'),
-                    ('--psm 7', 'single line'),
-                    ('--psm 8', 'single word'),
-                    ('--psm 12', 'sparse text with OSD'),
-                ]
-                
-                images_to_try = [
-                    (gray, 'original'),
-                    (enhanced_gray, 'enhanced'),
-                ]
-                
-                all_matches = []
-                
-                for img_ocr, img_name in images_to_try:
-                    for psm_config, psm_desc in ocr_configs:
-                        try:
-                            ocr_data = pytesseract.image_to_data(img_ocr, output_type=pytesseract.Output.DICT, config=psm_config)
-                            for i, text in enumerate(ocr_data['text']):
-                                text_lower = text.lower().strip()
-                                if len(text_lower) > 0 and 'reset' in text_lower:
-                                    x = ocr_data['left'][i]
-                                    y = ocr_data['top'][i]
-                                    width = ocr_data['width'][i]
-                                    height = ocr_data['height'][i]
-                                    conf = ocr_data['conf'][i]
-                                    if conf >= -1:
-                                        all_matches.append((x, y, width, height, conf, text, psm_config, img_name))
-                        except:
-                            pass
-                
-                if all_matches:
-                    unique_matches = []
-                    seen = set()
-                    for match in all_matches:
-                        x, y, w, h, conf, text, psm, img_name = match
-                        loc_key = (x // 20, y // 20)
-                        if loc_key not in seen:
-                            seen.add(loc_key)
-                            unique_matches.append(match)
-                    unique_matches.sort(key=lambda m: -m[4])
-                    self.reset_x, self.reset_y, self.reset_w, self.reset_h, conf, text, psm, img_name = unique_matches[0]
-                    
+                result = detect_potential_region(
+                    self.original_image.copy(),
+                    debug=False,
+                    cube_type=self.cube_type.get(),
+                )
+
+                if result and result[1] is not None:
+                    _, reset_pos = result
+                    self.reset_x, self.reset_y, self.reset_w, self.reset_h = reset_pos
                     self.root.after(0, lambda: self.info_label.config(
-                        text=f"Reset button found at ({self.reset_x}, {self.reset_y})\nConfidence: {conf:.1f}%", fg="green"))
+                        text=f"{self.cube_type.get()} anchor found at ({self.reset_x}, {self.reset_y})",
+                        fg="green"))
                 else:
                     self.root.after(0, lambda: self.info_label.config(
-                        text="Reset button not found. Please check the image.", fg="red"))
+                        text=f"{self.cube_type.get()} anchor not found. Please check the image.",
+                        fg="red"))
                     self.reset_x = None
                     self.reset_y = None
+                    self.reset_w = None
+                    self.reset_h = None
                 
                 self.root.after(0, self.update_preview)
                 
@@ -251,7 +253,7 @@ class CropRegionTuner:
         h, w = display_img.shape[:2]
         
         # Draw Reset button if detected
-        if self.reset_x is not None and self.reset_y is not None:
+        if self.reset_x is not None and self.reset_y is not None and self.reset_w is not None and self.reset_h is not None:
             cv.rectangle(display_img, 
                         (self.reset_x, self.reset_y), 
                         (self.reset_x + self.reset_w, self.reset_y + self.reset_h), 
@@ -296,6 +298,26 @@ class CropRegionTuner:
         
     def save_config(self):
         try:
+            # Save selected slider values into the matching cube profile.
+            if self.cube_type.get() == "Bright":
+                glowing_offset_x = OFFSET_X
+                glowing_offset_above = OFFSET_ABOVE
+                glowing_stat_width = STAT_WIDTH
+                glowing_stat_height = STAT_HEIGHT
+                bright_offset_x = self.offset_x.get()
+                bright_offset_above = self.offset_above.get()
+                bright_stat_width = self.stat_width.get()
+                bright_stat_height = self.stat_height.get()
+            else:
+                glowing_offset_x = self.offset_x.get()
+                glowing_offset_above = self.offset_above.get()
+                glowing_stat_width = self.stat_width.get()
+                glowing_stat_height = self.stat_height.get()
+                bright_offset_x = BRIGHT_OFFSET_X
+                bright_offset_above = BRIGHT_OFFSET_ABOVE
+                bright_stat_width = BRIGHT_STAT_WIDTH
+                bright_stat_height = BRIGHT_STAT_HEIGHT
+
             config_content = f'''"""
 Configuration file for crop region offsets
 Adjust these values to fine-tune the auto-detected crop region
@@ -307,19 +329,27 @@ Adjust these values to fine-tune the auto-detected crop region
 # X offset from Reset button
 # Negative value = move LEFT from Reset button
 # Positive value = move RIGHT from Reset button
-OFFSET_X = {self.offset_x.get()}
+OFFSET_X = {glowing_offset_x}
 
 # Y offset from Reset button (always positive, moves UP)
 # This is how many pixels ABOVE the Reset button to start the crop
-OFFSET_ABOVE = {self.offset_above.get()}
+OFFSET_ABOVE = {glowing_offset_above}
 
 # Width of the crop region (in pixels)
 # Should be wide enough to capture stat lines like "Attack Power +xx"
-STAT_WIDTH = {self.stat_width.get()}
+STAT_WIDTH = {glowing_stat_width}
 
 # Height of the crop region (in pixels)
 # Fixed height for the crop region
-STAT_HEIGHT = {self.stat_height.get()}
+STAT_HEIGHT = {glowing_stat_height}
+
+# Bright cube offsets (different from Glowing cube)
+# For Bright cube, potential lines are under "AFTER" text
+# These offsets are relative to the Reset button position
+BRIGHT_OFFSET_X = {bright_offset_x}
+BRIGHT_OFFSET_ABOVE = {bright_offset_above}
+BRIGHT_STAT_WIDTH = {bright_stat_width}
+BRIGHT_STAT_HEIGHT = {bright_stat_height}
 '''
             with open('crop_config.py', 'w') as f:
                 f.write(config_content)
