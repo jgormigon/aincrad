@@ -459,6 +459,20 @@ def normalize_line(line):
     
     return normalized.strip()
 
+
+def _fuzzy_substring_magic_compatible(a, b):
+    """
+    If one string mentions Magic and the other does not, skip bidirectional substring fuzzy matches.
+    Prevents 'ATT: +9%' matching 'Magic ATT: +9%' (and no-space variants) when comparing to templates.
+    """
+    if not a or not b:
+        return True
+    # Detect Magic even when OCR drops spacing (e.g. "MagicATT", "MagicAttackPower").
+    ma = bool(re.search(r"Magic", a, re.IGNORECASE))
+    mb = bool(re.search(r"Magic", b, re.IGNORECASE))
+    return ma == mb
+
+
 def matches_line_pattern(line, pattern_list):
     """
     Check if a line matches any pattern in the list, accounting for OCR noise.
@@ -470,6 +484,12 @@ def matches_line_pattern(line, pattern_list):
     
     import re
     normalized = normalize_line(line)
+
+    # Map pattern_list → key(s) in single_lines_dict (identity or equality).
+    # Do not use naive substring checks (e.g. "ATT" in "Magic ATT" would wrongly tie ATT regex to MATT list).
+    pattern_list_single_keys = [
+        k for k, v in single_lines_dict.items() if v is pattern_list or v == pattern_list
+    ]
     
     # Try exact match first (both original and normalized)
     if line in pattern_list or normalized in pattern_list:
@@ -483,10 +503,38 @@ def matches_line_pattern(line, pattern_list):
         "INT": [r'\bINT\s*:?\s*\+(\d+)%', r'\bINT\s*\+(\d+)%'],
         "LUK": [r'\bLUK\s*:?\s*\+(\d+)%', r'\bLUK\s*\+(\d+)%'],
         "ALL": [r'All\s+Stats\s*:?\s*\+(\d+)%', r'All\s+Stats\s*\+(\d+)%', r'All\s*:?\s*\+(\d+)%', r'Allstats\s*:?\s*\+(\d+)%', r'Allstats\s*\+(\d+)%', r'Alistats\s*:?\s*\+(\d+)%', r'Alistats\s*\+(\d+)%', r'Alstats\s*:?\s*\+(\d+)%', r'Alstats\s*\+(\d+)%'],
-        "ATT": [r'(?<!Magic\s)ATT\s*:?\s*\+(\d+)%', r'(?<!Magic\s)ATT\s*\+(\d+)%', r'(?<!Magic\s)A[ti]tack\s+Power\s*:?\s*\+(\d+)%', r'(?<!Magic\s)A[ti]tack\s+Power\s*\+(\d+)%', r'(?<!Magic)A[ti]tackPower\s*:?\s*\+(\d+)%', r'(?<!Magic)A[ti]tackPower\s*\+(\d+)%']
+        "ATT": [
+            r'(?<!Magic)ATT\s*:?\s*\+(\d+)%',
+            r'(?<!Magic)ATT\s*\+(\d+)%',
+            r'(?<!Magic\s)A[ti]tack\s+Power\s*:?\s*\+(\d+)%',
+            r'(?<!Magic\s)A[ti]tack\s+Power\s*\+(\d+)%',
+            r'(?<!Magic)A[ti]tackPower\s*:?\s*\+(\d+)%',
+            r'(?<!Magic)A[ti]tackPower\s*\+(\d+)%',
+            r'(?<!Magic\s)Attack\s+Power\s*:?\s*\+(\d+)%',
+            r'(?<!Magic)AttackPower\s*:?\s*\+(\d+)%',
+        ],
+        "MATT": [
+            r'Magic\s*ATT\s*:?\s*\+(\d+)%',
+            r'Magic\s*ATT\s*\+(\d+)%',
+            r'MagicATT\s*:?\s*\+(\d+)%',
+            r'MagicATT\s*\+(\d+)%',
+            r'Magic\s*A[ti]tack\s*Power\s*:?\s*\+(\d+)%',
+            r'Magic\s*A[ti]tack\s*Power\s*\+(\d+)%',
+            r'MagicA[ti]tackPower\s*:?\s*\+(\d+)%',
+            r'MagicA[ti]tackPower\s*\+(\d+)%',
+            r'MagicAttackPower\s*:?\s*\+(\d+)%',
+            r'MagicAttackPower\s*\+(\d+)%',
+        ],
     }
     
     for stat_type, patterns in stat_patterns_to_check.items():
+        # Strong disambiguation between ATT and MATT:
+        # If the OCR line contains "Magic", it must not be considered ATT.
+        # If it does not contain "Magic", it must not be considered MATT.
+        if stat_type == "ATT" and re.search(r"Magic", line, re.IGNORECASE):
+            continue
+        if stat_type == "MATT" and not re.search(r"Magic", line, re.IGNORECASE):
+            continue
         for pattern in patterns:
             match = re.search(pattern, line, re.IGNORECASE)
             if match:
@@ -494,9 +542,10 @@ def matches_line_pattern(line, pattern_list):
                 # (since stat lines are valid potential lines even if not in the exact list)
                 if pattern_list == single_lines_list:
                     return True
-                # Also check if pattern_list contains this stat type
-                has_stat_patterns = any(stat_type in p or stat_type.lower() in p.lower() for p in pattern_list)
-                if has_stat_patterns:
+                # Only associate the regex hit with lists that explicitly belong to this stat_type
+                if pattern_list_single_keys:
+                    if stat_type not in pattern_list_single_keys:
+                        continue
                     return True
     
     # Try fuzzy matching - check if the line contains the pattern
@@ -506,17 +555,21 @@ def matches_line_pattern(line, pattern_list):
         line_clean = line.strip()
         
         # Check if normalized line contains the pattern (or vice versa)
-        if pattern_clean in normalized_clean or normalized_clean in pattern_clean:
+        if pattern_clean in normalized_clean and _fuzzy_substring_magic_compatible(pattern_clean, normalized_clean):
+            return True
+        if normalized_clean in pattern_clean and _fuzzy_substring_magic_compatible(pattern_clean, normalized_clean):
             return True
         
         # Check if original line contains pattern (for cases where normalization didn't help)
-        if pattern_clean in line_clean:
+        if pattern_clean in line_clean and _fuzzy_substring_magic_compatible(pattern_clean, line_clean):
             return True
         
         # Try matching without spaces and colons (for OCR variations)
         pattern_no_spaces = pattern_clean.replace(' ', '').replace(':', '')
         normalized_no_spaces = normalized_clean.replace(' ', '').replace(':', '')
-        if pattern_no_spaces in normalized_no_spaces:
+        if pattern_no_spaces in normalized_no_spaces and _fuzzy_substring_magic_compatible(pattern_clean, normalized_clean):
+            return True
+        if normalized_no_spaces in pattern_no_spaces and _fuzzy_substring_magic_compatible(pattern_clean, normalized_clean):
             return True
     
     return False
@@ -707,7 +760,8 @@ def extract_stat_value(line, stat_type):
         # Handle OCR error "Aitack" (t→i)
         if (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or 
             re.search(r'Magic\s*A[ti]tack\s*Power', line, re.IGNORECASE) or
-            re.search(r'MagicA[ti]tackPower', line, re.IGNORECASE)):
+            re.search(r'MagicA[ti]tackPower', line, re.IGNORECASE) or
+            re.search(r'MagicAttackPower', line, re.IGNORECASE)):
             return 0  # This is Magic ATT, not regular ATT
     
     for pattern in stat_patterns[stat_type]:

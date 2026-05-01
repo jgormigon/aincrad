@@ -510,14 +510,20 @@ class BotGUI:
                                           relief=FLAT, bd=1)
         stat_types_frame_flex.pack(fill=X, padx=5, pady=5)
         
-        self.flex_stat_bd = BooleanVar(value="BD" in flex_config.get("stat_types", []))
-        self.flex_stat_att = BooleanVar(value="ATT" in flex_config.get("stat_types", []))
-        self.flex_stat_matt = BooleanVar(value="MATT" in flex_config.get("stat_types", []))
-        self.flex_stat_ied = BooleanVar(value="IED" in flex_config.get("stat_types", []))
-        self.flex_stat_cd = BooleanVar(value="CD" in flex_config.get("stat_types", []))
-        self.flex_stat_ia = BooleanVar(value="IA" in flex_config.get("stat_types", []))
-        self.flex_stat_meso = BooleanVar(value="MESO" in flex_config.get("stat_types", []))
-        self.flex_stat_sc = BooleanVar(value="SC" in flex_config.get("stat_types", []))
+        flex_types_in = flex_config.get("stat_types", [])
+        self.flex_stat_str = BooleanVar(value="STR" in flex_types_in)
+        self.flex_stat_dex = BooleanVar(value="DEX" in flex_types_in)
+        self.flex_stat_int = BooleanVar(value="INT" in flex_types_in)
+        self.flex_stat_luk = BooleanVar(value="LUK" in flex_types_in)
+        self.flex_stat_all = BooleanVar(value="ALL" in flex_types_in)
+        self.flex_stat_bd = BooleanVar(value="BD" in flex_types_in)
+        self.flex_stat_att = BooleanVar(value="ATT" in flex_types_in)
+        self.flex_stat_matt = BooleanVar(value="MATT" in flex_types_in)
+        self.flex_stat_ied = BooleanVar(value="IED" in flex_types_in)
+        self.flex_stat_cd = BooleanVar(value="CD" in flex_types_in)
+        self.flex_stat_ia = BooleanVar(value="IA" in flex_types_in)
+        self.flex_stat_meso = BooleanVar(value="MESO" in flex_types_in)
+        self.flex_stat_sc = BooleanVar(value="SC" in flex_types_in)
         
         # Two columns for stat checkboxes
         stats_left_flex = Frame(stat_types_frame_flex, bg=COLORS['frame_bg'])
@@ -525,6 +531,36 @@ class BotGUI:
         stats_right_flex = Frame(stat_types_frame_flex, bg=COLORS['frame_bg'])
         stats_right_flex.pack(side=LEFT, fill=BOTH, expand=True, padx=5)
         
+        Checkbutton(stats_left_flex, text="STR", variable=self.flex_stat_str,
+                   bg=COLORS['frame_bg'], fg=COLORS['fg'],
+                   selectcolor=COLORS['accent'],
+                   activebackground=COLORS['frame_bg'],
+                   activeforeground=COLORS['fg'],
+                   font=("Arial", 9)).pack(anchor=W)
+        Checkbutton(stats_left_flex, text="DEX", variable=self.flex_stat_dex,
+                   bg=COLORS['frame_bg'], fg=COLORS['fg'],
+                   selectcolor=COLORS['accent'],
+                   activebackground=COLORS['frame_bg'],
+                   activeforeground=COLORS['fg'],
+                   font=("Arial", 9)).pack(anchor=W)
+        Checkbutton(stats_left_flex, text="INT", variable=self.flex_stat_int,
+                   bg=COLORS['frame_bg'], fg=COLORS['fg'],
+                   selectcolor=COLORS['accent'],
+                   activebackground=COLORS['frame_bg'],
+                   activeforeground=COLORS['fg'],
+                   font=("Arial", 9)).pack(anchor=W)
+        Checkbutton(stats_left_flex, text="LUK", variable=self.flex_stat_luk,
+                   bg=COLORS['frame_bg'], fg=COLORS['fg'],
+                   selectcolor=COLORS['accent'],
+                   activebackground=COLORS['frame_bg'],
+                   activeforeground=COLORS['fg'],
+                   font=("Arial", 9)).pack(anchor=W)
+        Checkbutton(stats_left_flex, text="ALL Stats", variable=self.flex_stat_all,
+                   bg=COLORS['frame_bg'], fg=COLORS['fg'],
+                   selectcolor=COLORS['accent'],
+                   activebackground=COLORS['frame_bg'],
+                   activeforeground=COLORS['fg'],
+                   font=("Arial", 9)).pack(anchor=W)
         Checkbutton(stats_left_flex, text="Boss Damage (BD)", variable=self.flex_stat_bd,
                    bg=COLORS['frame_bg'], fg=COLORS['fg'],
                    selectcolor=COLORS['accent'],
@@ -543,13 +579,13 @@ class BotGUI:
                    activebackground=COLORS['frame_bg'],
                    activeforeground=COLORS['fg'],
                    font=("Arial", 9)).pack(anchor=W)
-        Checkbutton(stats_left_flex, text="Ignore Defense (IED)", variable=self.flex_stat_ied,
+        
+        Checkbutton(stats_right_flex, text="Ignore Defense (IED)", variable=self.flex_stat_ied,
                    bg=COLORS['frame_bg'], fg=COLORS['fg'],
                    selectcolor=COLORS['accent'],
                    activebackground=COLORS['frame_bg'],
                    activeforeground=COLORS['fg'],
                    font=("Arial", 9)).pack(anchor=W)
-        
         Checkbutton(stats_right_flex, text="Critical Damage (CD)", variable=self.flex_stat_cd,
                    bg=COLORS['frame_bg'], fg=COLORS['fg'],
                    selectcolor=COLORS['accent'],
@@ -822,6 +858,16 @@ class BotGUI:
         
         # Flexible roll check (new system)
         flex_stat_types = []
+        if self.flex_stat_str.get():
+            flex_stat_types.append("STR")
+        if self.flex_stat_dex.get():
+            flex_stat_types.append("DEX")
+        if self.flex_stat_int.get():
+            flex_stat_types.append("INT")
+        if self.flex_stat_luk.get():
+            flex_stat_types.append("LUK")
+        if self.flex_stat_all.get():
+            flex_stat_types.append("ALL")
         if self.flex_stat_bd.get():
             flex_stat_types.append("BD")
         if self.flex_stat_att.get():

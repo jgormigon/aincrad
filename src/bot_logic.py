@@ -25,7 +25,7 @@ default_config = {
     "stopAtStatThreshold": False,
     "flexible_roll_check": {
         "enabled": False,
-        "stat_types": [],  # List of stat types: ["BD", "ATT", "MATT", "IED", "CD", "IA", "MESO", "SC"]
+        "stat_types": [],  # List of stat types: STR/DEX/INT/LUK/ALL + BD/ATT/MATT/IED/CD/IA/MESO/SC
         "required_count": 2  # Number of matching lines required (1, 2, or 3)
     },
     "ocr_callback": None,  # Callback function to update OCR results in GUI
@@ -479,7 +479,8 @@ class potential:
         # Handle OCR error "Aitack" (t→i)
         if (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or 
             re.search(r'Magic\s*A[ti]tack\s*Power', line, re.IGNORECASE) or
-            re.search(r'MagicA[ti]tackPower', line, re.IGNORECASE)):
+            re.search(r'MagicA[ti]tackPower', line, re.IGNORECASE) or
+            re.search(r'MagicAttackPower', line, re.IGNORECASE)):
             return False  # Explicitly exclude Magic ATT (handles "Magic ATT", "MagicATT", "MagicAttackPower", "MagicAitackPower", etc.)
         
         # Check exact match or pattern match (only ATT, not MATT)
@@ -492,7 +493,9 @@ class potential:
         if matches_line_pattern(line, single_lines_dict['ATT']):
             # Double-check it's not Magic ATT (in case matches_line_pattern matched it)
             # Handle OCR error "Aitack" (t→i)
-            if not (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or re.search(r'Magic\s*A[ti]tack\s*Power', line, re.IGNORECASE)):
+            if not (re.search(r'Magic\s*ATT', line, re.IGNORECASE) or 
+                    re.search(r'Magic\s*A[ti]tack\s*Power', line, re.IGNORECASE) or
+                    re.search(r'MagicAttackPower', line, re.IGNORECASE)):
                 return True
         
         # Also check with regex for variations (exclude Magic ATT using negative lookbehind)
@@ -605,6 +608,16 @@ class potential:
         stat_type_upper = stat_type.upper()
         if stat_type_upper == "BD" or stat_type_upper == "BOSS DAMAGE":
             return self._has_boss_damage(line)
+        elif stat_type_upper == "STR":
+            return extract_stat_value(line, "STR") > 0
+        elif stat_type_upper == "DEX":
+            return extract_stat_value(line, "DEX") > 0
+        elif stat_type_upper == "INT":
+            return extract_stat_value(line, "INT") > 0
+        elif stat_type_upper == "LUK":
+            return extract_stat_value(line, "LUK") > 0
+        elif stat_type_upper == "ALL" or stat_type_upper == "ALL STATS":
+            return extract_stat_value(line, "ALL") > 0
         elif stat_type_upper == "ATT" or stat_type_upper == "ATTACK POWER":
             return self._has_attack_power(line)
         elif stat_type_upper == "MATT" or stat_type_upper == "MAGIC ATT":
