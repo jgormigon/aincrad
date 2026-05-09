@@ -150,6 +150,9 @@ class BotGUI:
         self.stop_hotkey = StringVar(value="f2")
         self.hotkey_handlers = {}  # Store hotkey handlers
         
+        self.discord_notify_requirements_met = BooleanVar(value=default_config["discord_notify_requirements_met"])
+        self.discord_webhook_url = StringVar(value=default_config["discord_webhook_url"])
+        
         self.create_widgets()
         self.setup_hotkeys()
         
@@ -717,6 +720,54 @@ class BotGUI:
         Label(stop_hotkey_frame, text="(Click to capture)", bg=COLORS['frame_bg'], 
              fg=COLORS['warning'], font=("Arial", 8)).pack(side=LEFT, padx=5)
         
+        # Discord notification (webhook)
+        discord_frame = LabelFrame(scrollable_frame, text="Discord",
+                                   padx=10, pady=10, bg=COLORS['frame_bg'],
+                                   fg=COLORS['fg'], font=("Arial", 10, "bold"),
+                                   relief=FLAT, bd=1)
+        discord_frame.pack(fill=X, padx=10, pady=5)
+        
+        Checkbutton(
+            discord_frame,
+            text='Post "Cubing stopped" when requirements are met',
+            variable=self.discord_notify_requirements_met,
+            bg=COLORS['frame_bg'],
+            fg=COLORS['fg'],
+            selectcolor=COLORS['accent'],
+            activebackground=COLORS['frame_bg'],
+            activeforeground=COLORS['fg'],
+            font=("Arial", 9),
+        ).pack(anchor=W)
+        
+        webhook_row = Frame(discord_frame, bg=COLORS['frame_bg'])
+        webhook_row.pack(fill=X, pady=(8, 0))
+        Label(webhook_row, text="Webhook URL:", bg=COLORS['frame_bg'],
+              fg=COLORS['fg'], font=("Arial", 9), width=14).pack(side=LEFT)
+        Entry(
+            webhook_row,
+            textvariable=self.discord_webhook_url,
+            width=52,
+            bg=COLORS['entry_bg'],
+            fg=COLORS['fg'],
+            insertbackground=COLORS['fg'],
+            font=("Arial", 9),
+            relief=FLAT,
+            highlightthickness=1,
+            highlightbackground=COLORS['border'],
+        ).pack(side=LEFT, fill=X, expand=True, padx=(0, 5))
+        
+        discord_help = Label(
+            discord_frame,
+            text="Create an Incoming Webhook in your Discord server settings (Integrations → Webhooks). "
+                 "The message is sent only when the bot stops because your cubing criteria passed—not on manual stop or OCR errors.",
+            font=("Arial", 8),
+            fg=COLORS['warning'],
+            bg=COLORS['frame_bg'],
+            wraplength=520,
+            justify=LEFT,
+        )
+        discord_help.pack(anchor=W, padx=5, pady=(8, 0))
+        
         # Info label
         hotkey_info = Label(hotkey_frame, 
                            text="Note: Click on the hotkey field, then press your desired key combination. Hotkeys work globally.",
@@ -890,6 +941,9 @@ class BotGUI:
             "stat_types": flex_stat_types,
             "required_count": int(self.flex_required_count.get())
         }
+        
+        config["discord_notify_requirements_met"] = self.discord_notify_requirements_met.get()
+        config["discord_webhook_url"] = self.discord_webhook_url.get().strip()
         
         return config
         

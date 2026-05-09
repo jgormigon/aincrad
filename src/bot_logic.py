@@ -29,7 +29,9 @@ default_config = {
         "required_count": 2  # Number of matching lines required (1, 2, or 3)
     },
     "ocr_callback": None,  # Callback function to update OCR results in GUI
-    "ocr_preview_callback": None  # Callback (screenshot_bgr, crop_region) to show capture + crop in GUI
+    "ocr_preview_callback": None,  # Callback (screenshot_bgr, crop_region) to show capture + crop in GUI
+    "discord_notify_requirements_met": False,
+    "discord_webhook_url": "",
 }
 
 # Global config - will be set by GUI
@@ -55,6 +57,25 @@ class potential:
             except Exception as e:
                 # Silently fail if callback has issues
                 pass
+
+    def _mark_pass_stop(self):
+        """Stop because cubing requirements were met (see _notify_discord_if_requirements_met)."""
+        self.stop_bot = True
+        self._stop_reason = "requirements_met"
+
+    def _notify_discord_if_requirements_met(self):
+        if getattr(self, "_stop_reason", None) != "requirements_met":
+            return
+        if not config.get("discord_notify_requirements_met"):
+            return
+        url = (config.get("discord_webhook_url") or "").strip()
+        if not url:
+            return
+        try:
+            from src.discord_notify import send_discord_webhook
+            send_discord_webhook(url, "Cubing stopped")
+        except Exception:
+            pass
 
     def get_lines(self):
         window_name = config.get("window_name", "Maplestory")
@@ -90,6 +111,7 @@ class potential:
             error_text = f"OCR ERROR: got Trash, Trash. Stopping bot. Details: {details}"
             self._send_ocr_result(error_text)
             self.stop_bot = True
+            self._stop_reason = "ocr_error"
             bot_stop_event.set()
     
     def get_stat_values(self):
@@ -331,7 +353,7 @@ class potential:
         
         highest_stat = self.get_highest_stat()
         if highest_stat >= config["statThreshold"]:
-            self.stop_bot = True
+            self._mark_pass_stop()
             stats = self.get_stat_values()
             # Format output with 3 lines and total stats
             lines_str = f"{self.line1}, {self.line2}"
@@ -345,7 +367,7 @@ class potential:
 
     def check_roll_2L_BD(self):
         if self.line1 in single_lines_dict["BD"] and self.line2 in single_lines_dict['BD']:
-            self.stop_bot = True
+            self._mark_pass_stop()
             result_text = f"{self.line1}, {self.line2}    PASS"
             self._send_ocr_result(result_text)
             return True
@@ -354,7 +376,7 @@ class potential:
 
     def check_roll_2L_IA(self):
         if self.line1 in single_lines_dict['IA'] and self.line2 in single_lines_dict['IA']:
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -367,7 +389,7 @@ class potential:
 
     def check_roll_2L_CD_6(self):
         if self.line1 == single_lines_dict['CD'][0] and self.line2 == single_lines_dict['CD'][0]:
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -398,7 +420,7 @@ class potential:
                         att_count += 1
                         if att_count >= 2:
                             # Found 2 ATT instances, stop bot
-                            self.stop_bot = True
+                            self._mark_pass_stop()
                             lines_str = f"{self.line1}, {self.line2}"
                             if self.line3 and self.line3 != "Trash":
                                 lines_str += f", {self.line3}"
@@ -411,7 +433,7 @@ class potential:
     
     def check_roll_2L_ATT_15(self):
         if self.line1 in single_lines_dict['ATT'] and self.line2 in double_lines_dict.get('ATT', []):
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -420,7 +442,7 @@ class potential:
             self._send_ocr_result(result_text)
             return True
         elif self.line2 in single_lines_dict['ATT'] and self.line1 in double_lines_dict.get('ATT', []):
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -433,7 +455,7 @@ class potential:
     
     def check_roll_BD_IED(self):
         if self.line1 in single_lines_dict['BD'] and self.line2 in double_lines_dict['IED']:
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -442,7 +464,7 @@ class potential:
             self._send_ocr_result(result_text)
             return True
         elif self.line2 in single_lines_dict['BD'] and self.line1 in double_lines_dict['IED']:
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -677,7 +699,7 @@ class potential:
         
         # Stop if we have enough matching lines
         if matching_count >= required_count:
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -714,7 +736,7 @@ class potential:
         
         # All three must be present
         if has_bd and has_att and has_ied:
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -727,7 +749,7 @@ class potential:
 
     def check_roll_1L_IA(self):
         if self.line1 in single_lines_dict['IA'] or self.line2 in single_lines_dict['IA']:
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -740,7 +762,7 @@ class potential:
     
     def check_roll_IA_DR(self):
         if self.line1 in single_lines_dict['IA'] and self.line2 in double_lines_dict.get('Drop', []):
-            self.stop_bot=True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -749,7 +771,7 @@ class potential:
             self._send_ocr_result(result_text)
             return True
         elif self.line2 in single_lines_dict['IA'] and self.line1 in double_lines_dict.get('Drop', []):
-            self.stop_bot = True
+            self._mark_pass_stop()
             lines_str = f"{self.line1}, {self.line2}"
             if self.line3 and self.line3 != "Trash":
                 lines_str += f", {self.line3}"
@@ -764,6 +786,7 @@ class potential:
 
 
     def startbot(self):
+        self._stop_reason = None
         # Reset stop event at start
         bot_stop_event.clear()
         
@@ -783,6 +806,7 @@ class potential:
         if config["stopAtStatThreshold"]:
             if self.check_roll_stat_threshold():
                 self._send_ocr_result("Initial potential already meets threshold! Stopping bot.")
+                self._notify_discord_if_requirements_met()
                 return
         
         # Check all other conditions
@@ -798,6 +822,7 @@ class potential:
         
         if checks_passed or self.stop_bot:
             print("Initial potential already satisfies conditions! Stopping bot.")
+            self._notify_discord_if_requirements_met()
             return
         
         print("Initial potential does not meet requirements. Starting bot loop...")
@@ -856,6 +881,7 @@ class potential:
                     if stats_match:
                         # Same valid stats 5 times in a row - cubes are used up
                         self.stop_bot = True
+                        self._stop_reason = "cubes_exhausted"
                         lines_str = f"{self.line1}, {self.line2}"
                         if self.line3 and self.line3 != "Trash":
                             lines_str += f", {self.line3}"
@@ -878,6 +904,7 @@ class potential:
             # Check if we should stop (potential passed)
             if self.stop_bot:
                 # Potential passed - stop immediately without resetting
+                self._notify_discord_if_requirements_met()
                 return
             
             # Potential did NOT pass - format output and reset for next iteration
